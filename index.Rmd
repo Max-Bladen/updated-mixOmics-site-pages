@@ -21,7 +21,7 @@ library(knitr)
 ```{r}
 # username = 'password'
 options(WordpressURL = c('http://mixomics.org/xmlrpc.php'))
-options(WordpressLogin = c( "maxbladen" = "1Cg^ZOTlLJJoYAR(J@Obv!kf" )) 
+options(WordpressLogin = c( "" = "" )) 
 
 # note: you may have to play around with the following options 'http://mixomics.org/xmlrpc.php' (http, not https)
 ```
