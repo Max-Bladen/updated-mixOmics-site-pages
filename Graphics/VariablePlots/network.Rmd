@@ -1,0 +1,92 @@
+---
+#title: "Networks"
+date: "`r Sys.Date()`"
+output: html_document
+---
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, echo= TRUE, warning=FALSE, message=FALSE, #dev = 'jpeg',
+                      fig.show=TRUE, fig.keep = 'all', fig.height= 6, fig.width=7)
+```
+# **network()** - Relevance Network Graph
+
+Relevance networks are an extremely useful tool in evaluating the structure of associations between variables. Methods which utilise an Euclidean distance often miss some information due to an inability to represent postive and negative correlations simultaneously. Networks are able to show these sorts of structures. Networks also provide information on when variables belong to the same biological pathway.
+
+The implementation of networks within `mixOmics` is *bipartite*, such that only **pairs of variables belonging to different omics datasets** are depicted, meaning connections can be made between these disparate types of biological data. Variables are drawn as the nodes and the associations between them are represented by the lines connecting a pair of these nodes. 
+
+Relevance networks can be prone to depicting spurious associations. This is circumvented within the `mixOmics` package by the use of variable selection and the use of components to estimate these associations. 
+
+`network()` serves as the function to generate these relevance networks. It can operate on the outputs from the (s)PLS and (r)CCA methods. 
+
+```{r}
+library(mixOmics)
+data(nutrimouse)
+```
+
+## **network()** Parameters
+
+#### **cutoff** 
+As with the `plotVar()` function, the visual clutter of the resulting graph can be reduced by using this parameter. Any association that has a value lower than the inputted value won't be drawn. This defaults to `cutoff = 0`, meaning that all associations will be depicted. 
+
+#### **interactive**
+If experimentation with the `cutoff` value is desired, an interactive scrollbar can be created by setting `interactive = TRUE`. By selecting different values on the scrollbar, new plots will be produced using that value as the `cutoff`. This defaults to `interactive = FALSE`.
+
+#### **save** and **name.save** 
+The resulting network graph can be exported to an external image file (deposited within the working directory) using the `save` parameter. A selection of file types is avaiable, including `‘jpeg’`, `‘tiff’`, `‘png’` and `‘pdf’`. Include a string with the `name.save` parameter to save it properly. An example of this can be seen below.
+
+``` {r, eval = FALSE}
+# a file PLS_network_image.jpeg will be saved to the working directory
+network.res <- network(pls.object, save = 'jpeg', 
+                       name.save = 'PLS_network_image') 
+```
+
+## **network()** in Multi Omics
+
+The key insight provided by networks are the sub-networks (or *cliques*) that can be seen. These clusters often highlight specific structures between variables. The colour of each line indicates the nature of the correlation between each feature. Figure 1 shows the resulting network of a PLS method without and with a cutoff.
+
+``` {r, fig.show = "hold", out.width = "49%"}
+X <- nutrimouse$lipid
+Y <- nutrimouse$gene
+
+pls.nutri <- pls(X, Y)
+
+network(pls.nutri, color.node = c("orange","lightblue"))
+network(pls.nutri, color.node = c("orange","lightblue"), cutoff = 0.55)
+```
+
+<p style="text-align: center;">FIGURE 1: Relevance network from the PLS applied to the nutrimouse lipid and gene data sets</p>
+
+## Addition Notes
+
+### Functionality with **iGraph**
+The `igraph` package is utilised by the `network()` function in order to generate the relevance networks. As a result of how this package functions, the layout of the network may be different each time the same `network()` function is called. The network itself will be the same, but the position of the variables will differ. The network can be customised further by exporting the graph to a Cytoscape file format using `write.graph()` from the `igraph` package. This can be seen directly below:
+
+``` {r, eval = FALSE}
+library(igraph)
+network.res <- network(pls.nutri)
+write.graph(network.res$gR, file = "network.gml", format = "gml")
+```
+
+### A Common Error
+A common error that is run into when using this function causes the following call in the Rstudio console:
+``` {r, eval = FALSE}
+Error in plot.new() : figure margins too large
+```
+This is caused by the actual window being too small in Rstudio. It is advised to make Rstudio cover the whole screen and then adjust the margins of the various windows such that the size of the window where the 'Plots' is found is maximised. This should resolve this common error.
+
+If this fails, the use of the `X11()` function may also resolve this. Refer to the `save` and `name.save` parameter section as well if this is still an issue.
+
+
+# Case Studies
+
+Refer to the following case studies for a more in depth look at generating and interpreting the output of the `network()` function:
+
+- [rCCA - Nutrimouse](http://mixomics.org/rcca-nutrimouse/)
+- [sPLS - Liver Toxicity](http://mixomics.org/case-studies/spls-liver-toxicity/)
+- [N-Integration - TCGA](http://mixomics.org/mixdiablo/diablo-tcga-case-study/)
+- [P-Integration - Stem cells](http://mixomics.org/mixmint/mint-stem-cells-case-study/)
+
+
+# References
+
+[González I., Lê Cao K.-A., Davis, M.D. and Déjean S. (2013) Insightful graphical outputs to explore relationships between two ‘omics’ data sets. BioData Mining 5:19](http://mixomics.org/wp-content/uploads/2012/03/Visualising_JDataMining.pdf)

@@ -1,0 +1,264 @@
+---
+#title: "Multiblock sPLS Gastrulation Case Study"
+output: html_document
+---
+
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, 
+                      echo= TRUE, 
+                      warning=FALSE, 
+                      message=FALSE, 
+                      fig.show=TRUE, 
+                      fig.keep = 'all',
+                      out.width = "70%")
+```
+
+# Case Study of Multiblock sPLS with Gastrulation Dataset
+
+In this case study, the functionality of the multiblock sPLS (MB-sPLS) framework will be outlined and explored. MB-sPLS is the N-integrative form of the sPLS method, such that there are more than two sets of quantitative data that were measured across the same subjects. 
+
+For background information on the (s)PLS or N-integrative methods, refer to the [Multiblock PLS Methods Page](http://mixomics.org/methods/multiblock-spls/) and the [N-integration Methods Page](http://mixomics.org/methods/n-integration-methods/).
+
+# Rscript
+
+The R script used for all the analysis in this case study is available [here](http://mixomics.org/wp-content/uploads/2022/01/Multiblock-sPLS-Gastrulation-Case-Study.zip).
+
+# To begin
+
+Load the latest version of mixOmics. Note that the seed is set such that all plots can be reproduced. This should not be included in proper use of these functions.
+
+``` {r}
+library(mixOmics) # import the mixOmics library
+
+set.seed(123) # for reproducibility, remove for normal use
+```
+
+## The data
+
+This vignette will use the gastrulation data yielded by Ricard et al. 2019 [1]. Unlike most other data used in case studies on this site, it is not found within the `mixOmics` package. The study the data is drawn from aimed to combine genomic, transcriptomic and epigenomic profiles from single cells in an effort to determine the nature of developmental and disease cell biology. 
+
+The data set (which can be downloaded [here](http://mixomics.org/wp-content/uploads/2022/01/Multiblock-sPLS-Data.zip)) contains the following:
+
+* `data$rna` (continuous matrix): 826 rows and 556 columns. Contains the scRNA-seq data. Highly variable genes were kept. Data were logcount transformed and scaled for size factor.
+* `data$met_genebody` (continuous matrix): 826 rows and 3000 columns. Contains methylation data summarised for gene bodies.
+* `data$met_promoter` (continuous matrix): 826 rows and 180 columns. Contains methylation data summarised for promoters.
+* `data$acc_genebody` (continuous matrix): 826 rows and 3867 columns. Contains accessibility data summarised for gene bodies.
+* `data$acc_genebody` (continuous matrix): 826 rows and 406 columns. Contains accessibility data summarised for promoters.
+
+To confirm the correct dataframes were extracted, the dimensions of each are checked. 
+
+``` {r}
+load('Data/nmt_data_processed.RData') # load the gastrulation data
+
+X1 <- data$rna # select three of the five dataframes to explore
+X2 <- data$met_genebody
+X3 <- data$acc_genebody
+
+# compile these into a single X object
+X <- list(rna = X1, methylation = X2, accessibility = X3) 
+
+lapply(X, dim) # check dimensions
+```
+
+
+
+# Initial Analysis
+
+## Pairwise PLS Comparisons
+
+Prior to tuning and fitting a MB-sPLS model, the datasets should be explored in a pairwise manner. While the focus is understanding how the two explantory datasets relate to the RNA data, the relationship between the methylation and accessibility datasets is important to assess. These pairwise comparisons can be seen in Figure 1. Note that there were only 25 features from each dataframe selected and features with a correlation value lower than 0.5 were removed from the plot.
+
+Observing Figure 1(a), it seems that the selected RNA features are all positively associated with the first component. There are a few methylation features that are highly correlated with these, but most are negatively associated with the first component. The opposite of this is the case when looking at the relationships between the RNA and accessibility features (Figure 1(b)). The methlyation and accessibility features are highly negatively correlated with on another as can be seen in Figure 1(c).
+
+``` {r, fig.show = "hold", out.width = "33%", fig.height = 6}
+# select arbitrary values of features to keep
+list.keepX = c(25, 25)
+list.keepY = c(25, 25)
+
+# generate three pairwise PLS models
+pls1 <- spls(X[["rna"]], X[["methylation"]], 
+             keepX = list.keepX, keepY = list.keepY)
+pls2 <- spls(X[["rna"]], X[["accessibility"]], 
+             keepX = list.keepX, keepY = list.keepY)
+pls3 <- spls(X[["methylation"]], X[["accessibility"]], 
+             keepX = list.keepX, keepY = list.keepY)
+
+# plot features of first PLS
+plotVar(pls1, cutoff = 0.5, title = "(a) RNA vs Methylation",
+        legend = c("RNA", "Methylation"),
+        var.names = FALSE, style = 'graphics',
+        pch = c(16, 17), cex = c(2,2),
+        col = c('darkorchid', 'lightgreen'))
+
+# plot features of second PLS
+plotVar(pls2, cutoff = 0.5, title = "(b) RNA vs Accessibility",
+        legend = c("RNA", "Accessibility"),
+        var.names = FALSE, style = 'graphics',
+        pch = c(16, 17), cex = c(2,2),
+        col = c('darkorchid', 'lightgreen'))
+
+# plot features of third PLS
+plotVar(pls3, cutoff = 0.5, title = "(c) Methylation vs Accessibility",
+        legend = c("Methylation", "Accessibility"),
+        var.names = FALSE, style = 'graphics',
+        pch = c(16, 17), cex = c(2,2),
+        col = c('darkorchid', 'lightgreen'))
+```
+
+<p style="text-align: center;">FIGURE 1: Circle Correlation Plots for pairwise PLS models on the gastrulation data. Only displays the top 25 features for each dimension, subsetting by those with a correlation above 0.5.</p>
+
+Below the correlation between the **X** and **Y** components for each of the above sPLS models is shown.The RNA and methylation components are the most strongly correlated. The first components of the other two sPLS models showed correlation scores around 0.6.
+
+``` {r}
+# calculate correlation of RNA and methylation
+cor(pls1$variates$X, pls1$variates$Y)
+# calculate correlation of RNA and accessibility
+cor(pls2$variates$X, pls2$variates$Y)
+# calculate correlation of methylation and accessibility
+cor(pls3$variates$X, pls3$variates$Y) 
+```
+
+# Initial Multiblock sPLS Model
+
+## Design
+
+As discussed in the [N-Integration Methods page](http://mixomics.org/methods/n-integration-methods/), the "design" of the model needs to be created with the type of relationships to be explored in mind. Based on the correlation values seen above, a full design of value 0.5 will be used. In reality, there would be more exploration and tuning involved in forming this design matrix. 
+
+With a design in place, the initial MB-sPLS model can be generated. An arbitrarily high number of components (`ncomp = 5`) will be used.
+
+```{r}
+# for square matrix filled with 0.5s
+design = matrix(0.5, ncol = length(X), nrow = length(X), 
+                dimnames = list(names(X), names(X)))
+diag(design) = 0 # set diagonal to 0s
+
+basic.mbspls.model = block.spls(X, indY = 1, # generate basic model
+                                ncomp = 5, 
+                                design = design)
+```
+
+## Tuning 
+
+Unfortunately, there are not yet methods within `mixOmics` which allow for the tuning of `block.spls` objects. Hence, the number of of components (and features per component) to use cannot be determined experimentally as in all the other case studies. If tuning is necessary, manually undergoing repeated cross-validation, assessing the regression's Mean Squared Error (MSE) and $R^{2}$ scores as components are added, is the way to achieve optimal parameter values.
+
+For simplicity within this vignette, arbitrary values will be selected and can be seen below. 
+
+``` {r}
+choice.ncomp <- 3 
+choice.keepX <- list(rna = rep(50, 3), # 50 features per each component 
+                     methylation = rep(50, 3), 
+                     accessibility = rep(50, 3))
+```
+
+# Final model
+
+Using these selected parameter values, the final MB-sPLS model can be constructed.
+
+``` {r}
+# generate final model using "tuned" parameters
+final.mbspls.model = block.spls(X, indY = 1,  
+                                ncomp = choice.ncomp, 
+                                keepX = choice.keepX,
+                                design = design)
+```
+
+# Plots
+## Sample plots
+
+Now that the model is formed, visualisation is possible. First, the projection of the samples onto the novel components is plotted and can be seen in Figure 2. The samples are coloured by their lineage and symbols are used to denote the stage of that sample. Note that these factors (lineage and stage) were not taken into account to form the model. They are used purely for visualisation. Also note that only the RNA block is shown (`blocks = 1`), though three were produced. The other two plots are fairly noisy and don't contain as much information as Figure 2. However, this plot would benefit greatly from further optimisation and parameter tuning.
+
+Lineages such as the primitive endoderm are very well separated from the other lineages by the first two components. Others do not separate as well. It is interesting to see the similarity of samples taken from the visceral endoderm and the normal endoderm, irrespective of the stage of the sample. This goes to show the relatedness of these tissues from a RNA expression perspective. This is also the case for all those lineages found in the large cluster on the left, including the epiblast, primitive streak and mesoderm.
+
+
+``` {r, out.width = "90%", fig.align = "center"}
+plotIndiv(final.mbspls.model, ind.names = FALSE,
+          group = as.factor(cell_metadata$lineage), 
+          pch = as.factor(cell_metadata$stage),
+          col.per.group = color.mixo(1:8), 
+          legend = TRUE, legend.title = 'Lineage', legend.title.pch = 'Stage',
+          blocks = 1)
+```
+
+<p style="text-align: center;">FIGURE 2: Sample plot for sPLS2 performed on the gastrulation data. Samples are projected into the space spanned by the components yielded from the RNA dataset.</p>
+
+The `plotArrow()` function is very useful in multiblock contexts. The similarities and discrepancies between a given sample across the three datasets can be seen (refer to the legend). Samples deriving from the primitive endoderm are fairly similar across all three component spaces, as seen by the short arrows. Compare this to the ectoderm samples which have very long arrows indicating that there is large discrepancy between the projection of these samples in the three different spaces. One could potentially say that the RNA expression and methylation are more closely linked in tissues such as the primitive endoderm when compared with the ectoderm. 
+
+Note that this plot was made with a random subsample (of size 30) as using all samples yielded an impractical plot due to the sheer quantity of arrows.
+
+``` {r, echo = FALSE}
+set.seed(422)
+
+samples <- sample(1:dim(data$rna)[1], 30)
+
+X1 <- data$rna[samples, ] 
+X2 <- data$met_genebody[samples, ] 
+X3 <- data$acc_genebody[samples, ] 
+X.arrow <- list(rna = X1, methylation = X2, accessibility = X3)
+
+final.mbspls.model.arrow = block.spls(X.arrow, indY = 1, 
+                                ncomp = choice.ncomp, 
+                                keepX = choice.keepX,
+                                design = design)
+```
+
+``` {r, out.width = "90%", fig.align = "center"}
+symbols <- list(rna = 1, methylation = 6, accessibility = 7)
+
+plotArrow(final.mbspls.model.arrow, ind.names = FALSE,
+          group = as.factor(cell_metadata$lineage[samples]),
+          pch = symbols, pch.size = 3)
+```
+
+<p style="text-align: center;">FIGURE 3: Arrow plot from the sPLS2 performed on the gastrulation data. The star indicates the location of the centroid of a sample across all the three datsets. The tip of each arrow shows the location of that same sample in the space spanned by the components associated to a specific dataset.</p>
+
+## Variable plots
+
+Another extremely useful plot in this context is the correlation circle plot. This can be seen in Figure 4, where features from each dataset are plotted according to their association with the first two sPLS components. Save for the few RNA features which have high similarity with the accessibility features, each dataset's features cluster with themselves. The majority of RNA features and all accessibility features are negatively correlated with the methylation features interestingly. It also seems that the first component is much more discriminating than the second. 
+
+``` {r, out.width = "90%", fig.align = "center"}
+plotVar(final.mbspls.model, var.names = FALSE,
+        legend = TRUE, cutoff = 0.5,
+        pch = c(0,1,2))
+```
+
+<p style="text-align: center;">FIGURE 4: Correlation circle plot from the sPLS2 performed on the gastrulation data</p>
+
+A circos plot can be used to complement Figure 4. It depicts the correlations between each feature of each dataset. The top 30 selected features of each dataframe are shown. Lines are only drawn for correlations above 0.8 (`cutoff = 0.8`) to reduce visual clutter. Observing Figure 5, it seems that some of the RNA features are positively correlated with the methylation (correspond to the RNA features on the left in Figure 4) while others are negative in their correlation (correspond to the RNA features on the right in Figure 4). RNA features do not have many correlations (above 0.8) with the accessibility dataframe, though there are quite a few strong negative correlations between the methylation and accessibility datasets.
+
+``` {r, echo = FALSE}
+X.2 = list(methylation = data$met_genebody, 
+         accessibility = data$acc_genebody)
+
+list.keepX = list(methylation = rep(15, 2), accessibility = rep(15,2))
+list.keepY = c(rep(15, 2))
+
+final.mbspls.model.circos = block.spls(X = X.2, Y = data$rna,
+                                  ncomp = 2, keepX = list.keepX,
+                                  keepY = list.keepY, design = 'full')
+```
+
+``` {r, out.width = "90%", fig.align = "center", results = FALSE}
+circosPlot(final.mbspls.model.circos, 
+           group = cell_metadata$lineage, 
+           cutoff = 0.8,
+           Y.name = 'rna')
+```
+
+<p style="text-align: center;">FIGURE 5: Circos plot from multiblock sPLS performed on the gastrulation data The plot represents the correlations greater than 0.8 between variables of different types, represented on the side quadrants</p>
+
+
+
+# More information on Plots
+
+For a more in depth explanation of how to use and interpret the plots seen, refer to the following pages:
+
+- [`plotIndiv()` - Sample Plot](http://mixomics.org/graphics/sample-plots/plotindiv/)
+- [`plotArrow()` - Arrow Plot](http://mixomics.org/graphics/sample-plots-2/plotarrow-2/)
+- [`plotVar()` - Correlation Circle Plot](http://mixomics.org/graphics/variable-plots/plotvar/)
+- [`circosPlot()` - Circos Plot](http://mixomics.org/graphics/variable-plots/circos/)
+
+
+# References
+
+1. [Argelaguet, R., Clark, S.J., Mohammed, H. et al. Multi-omics profiling of mouse gastrulation at single-cell resolution. Nature 576, 487–491 (2019). https://doi.org/10.1038/s41586-019-1825-8](https://www.nature.com/articles/s41586-019-1825-8#citeas)

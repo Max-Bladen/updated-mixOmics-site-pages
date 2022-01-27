@@ -1,0 +1,325 @@
+---
+#title: "FAQ Main"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# FAQ
+
+The process of compiling the most frequent questions and appending them to this section is an on-going effort. If however your issue is not found on this page, check our [Discussion forum](https://mixomics-users.discourse.group/) or our [GitHub issue page](https://github.com/mixOmicsTeam/mixOmics/issues). And if you still cannot find an answer, post a question on our Discussion forum!
+
+The following questions are organised as such:
+
+- Data Input
+- Pre-processing
+- Parameter Tuning
+- Numerical Outputs
+- Graphical Outputs
+- Miscellaneous
+
+
+## **Data Input**
+
+#### **If I am using the (s)PLS framework to integrate my data, is the rCCA framework also applicable?**
+
+Yes, sPLS has two principal modes: regression and canonical. With the latter, the **X** (eg. genomics) and the **Y** dataframe (eg. metabolics) are used in a bidirectional manner to explain one another. Similar to sPLS canonical mode, rCCA models a bidirectional relationship to uncover the correlation structure between the two data sets. The primary difference is that sPLS seeks for components which maximise the covariance between datasets rather than their correlation. As the number of variables is likely to be much larger than the number of samples, you will have to choose the regularization parameters.
+
+If a unidirectional relationship is desired, look at using the regression mode of the sPLS methodology. 
+
+Useful links:
+
+- 1. [rCCA Methods page](http://mixomics.org/methods/rcca/)
+- 2. [rCCA Case Study](http://mixomics.org/case-studies/rcca-nutrimouse-case-study/)
+- 3. [(s)PLS Methods page](http://mixomics.org/methods/spls/)
+- 4. [(s)PLS Case Study](http://mixomics.org/case-studies/spls-liver-toxicity-case-study/)
+
+#### **Can `mixOmics` perform an analysis for 3 (or more) datasets at one time or should I perform a pairwise analysis of two datasets?**
+
+It sure can. This type of methodology is refered to as **multiblock** within the `mixOmics` package.
+
+If your datasets (of different omics types) are measured across the same *samples*, the N-integration framework will be very powerful. If they are of the same omics type and measure the same *features*, the P-integration framework is applicable. 
+
+Useful links:
+
+- 1. [Multiblock sPLS Methods page](http://mixomics.org/methods/multiblock-spls/)
+- 2. [DIABLO Methods page](http://mixomics.org/mixdiablo/)
+- 3. [MINT Methods Page](http://mixomics.org/mixmint/)
+
+#### **Can `mixOmics` handle multiclass data?**
+
+Yes in the case of a classification context, you can use PLS-DA if you are interested in discriminating the classes. The sparse version sPLS-DA is useful to identify discriminative features. The other approaches are purely unsupervised and therefore do not take into  account the classes of the samples.
+
+Useful links:
+
+- 1. [(s)PLS-DA Methods Page](http://mixomics.org/methods/spls-da/)
+- 2. [(s)PLS-DA Case Study](http://mixomics.org/case-studies/splsda-srbct-case-study/)
+
+#### **Can it combine SNP data with gene and/or metabolite expression data?**
+
+As long as the data are measured on the same matching samples, it should work.
+
+Useful links:
+
+- 1. [Multiblock sPLS Methods page](http://mixomics.org/methods/multiblock-spls/)
+- 2. [DIABLO Methods page](http://mixomics.org/mixdiablo/)
+
+
+## **Pre-processing**
+
+#### **Should I normalize the data before using `mixOmics`?**
+
+Yes, in nearly all cases the data should be normalized and possibly pre-processed beforehand. `mixOmics` will accept any type of data (raw, normalized). Be aware that PLS methods will center and scale the variables by default. For the PCA methods, users will need to specify `center = TRUE` and  `scale = TRUE`. rCCA takes the data as such (i.e. no transformation).
+
+#### **What should I do with missing values?**
+
+`mixOmics` methods such as **(s)PLS**, **(s)PLS-DA** and **(s)PCA** use the **NIPALS** algorithm to handle missing values (ie. **NA**s). **rCCA** can handle missing values when the cross validation approach is used. If the shrinkage method is being applied, user derived imputation is required.
+
+Useful links:
+
+- 1. [Missing Values](http://mixomics.org/methods/missing-values/)
+- 2. [rCCA Methods page](http://mixomics.org/methods/rcca/)
+
+
+
+ 
+## **Parameter Tuning**
+
+#### **When undergoing rCCA, what are the default values of the regularisation parameters?**
+
+When using the "ridge" method in rCCA, the $\lambda1$ and $\lambda2$ are tuned externally (via the `tune.rcc()` function). There are passed as parameters to `rcc()`. They do have default values (internally default to `0`), but these are not relevant as then there will be no penalisation. These values are strongly dependant on the data itself and should always be specifically tuned. 
+
+Useful links:
+
+- 1. [rCCA Methods page](http://mixomics.org/methods/rcca/)
+- 2. [rCCA Case Study](http://mixomics.org/case-studies/rcca-nutrimouse-case-study/)
+
+#### **When running `rcc()`, I have run into the following error:**
+#### `chol.default(Cxx) : the leading minor of order 30 is not positive definite`
+
+This is mostly likely to occur when encountering singular matrices, where the total number of variables from both data sets is much larger than the number of samples. We suggest using regularized CCA instead (i.e. with regularization parameters $\lambda1$ and $\lambda2$ greater than 0) or (s)PLS in canonical mode.
+
+Useful links:
+
+- 1. [rCCA Methods page](http://mixomics.org/methods/rcca/)
+- 2. [(s)PLS Methods page](http://mixomics.org/methods/spls/)
+
+#### **I'm looking at the output of `tune.splsda()`. What distance metric should I use and should I use the overall or balanced error rate?**
+
+This question is an extremely important one. As would be expected, it is entirely case dependent so there is no universal rule. However, there are a few markers we can use to guide our decision making. We will consider a sPLS-DA methodology for the remainder of this answer.
+
+In regards to what distance metric to use, [this paper](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1005752#sec038) provides a detailed breakdown. The key points is that generally the centroid based methods (`centroids.dist` and `mahalanobis.dist`) lead to better predictions. This is particularly true in complex classification problems and N-integration problems - and in these contexts the Mahalanobis distance usually performs the best. The maximum distance is great in simpler scenarios and when interpretability is important.
+
+When deciding which error rate (overall or balanced) to use, it is dependent on the distribution of classes in the response vector. If it is unbalanced, such that each factor of the response variable has different counts, the balanced error rate (BER) is more appropriate.  BER calculates the average proportion of wrongly classified samples in each class, weighted by the number of samples in each class. Therefore, contrary to ER, BER is less biased towards majority classes during the evaluation.
+
+Useful links:
+
+- 1. [(s)PLS-DA Methods Page](http://mixomics.org/methods/spls-da/)
+- 2. [(s)PLS-DA Case Study](http://mixomics.org/case-studies/splsda-srbct-case-study/)
+
+#### **When undergoing feature count tuning, how should I select my grid of `keepX` values?**
+
+Unfortunately, this common question does not have a definitive answer and is very dependent on the context. Using an iterative tuning process will save time in the long run. In other words, don't use a `keepX` grid that contains every value between 1 and 300 (`seq(1, 300, 1)`). Start with a lower 'resolution' and increase this in later iterations. For example, run the first round of tuning using `seq(10, 300, 20)` such that only every twentieth value after 10 is tried. Lets say that for the first component, the optimal value was `170`. From here, run the tuning process again, but this time use a smaller range with a higher granularity (ie. smaller interval), like `seq(120, 220, 5)`. Once this has selected a value (eg. `180`) run one last tuning with `seq(170, 190, 1)`. 
+
+This iterative process can be avoided depending on the research question. If the aim is to identify a small set of predictors, then focus the grid around lower values (eg. `seq(1, 20, 1)`).
+
+
+## **Numerical Outputs**
+
+#### **I have used `plotVar()` and would like the correlation coordinate for a specific variable. How do I do this?**
+
+The below code will provide the answer. By indexing the output matrix (`simMat`) as follows, the exact value can be determined: `simMat[desired.X.feature, desired.Y.feature]`.
+
+``` {r, eval = FALSE} 
+nutri.res <- rcc(X, Y, ncomp = 3, lambda1 = 0.064, lambda2 = 0.008) # run your analysis
+
+# calculate sum of each samples' position on each variate across the two datasets
+bisect = nutri.res$variates$X + nutri.res$variates$Y
+
+# find correlation between original X dataframe and each summed component
+cord.X = cor(nutri.res$X, bisect, use = "pairwise")
+# find correlation between original Y dataframe and each summed component
+cord.Y = cor(nutri.res$Y, bisect, use = "pairwise")
+
+# place all correlation values into a parsable matrix
+simMat = as.matrix(cord.X %*% t(cord.Y))
+```
+
+Useful links:
+
+- 1. [`plotVar()` Graphics Page](http://mixomics.org/graphics/variable-plots/plotvar/)
+
+#### **How can I access the predicted classes of the test samples when using `predict()` on the result of `plsda()`/`splsda()`?**
+
+The output object contains the `class` attribute. For each distance metric used, within `class` there will be a dataframe correpsonding to that metric. The rows of this dataframe correspond to the test samples while each column represents the predictions made for each sample using models of increasing component count (up to theW inputted `ncomp`).
+
+``` {r, echo = FALSE}
+load("splsdaSRBCTPredictions.RData")
+```
+
+The following call was used (derives from the sPLS-DA case study (*1*)):
+
+``` {r, eval = FALSE}
+# train the model
+train.splsda.srbct <- splsda(X.train, Y.train, ncomp = 3, keepX = c(25,25,25))
+
+# use the model on the Xtest set
+predict.splsda.srbct <- predict(train.splsda.srbct, X.test, dist = "mahalanobis.dist")
+```
+
+``` {r}
+predict.splsda.srbct$class$mahalanobis.dist
+```
+
+
+Useful links:
+
+- 1. [(s)PLS-DA Case Study](http://mixomics.org/case-studies/splsda-srbct-case-study/)
+
+#### **Why does the `explained_variance` output from methods such as PLS-DA not decrease across components like PCA?**
+
+PCA maximises the variance of the component related to the inputted dataframe in an iterative process. Hence, as more components are formed, each accounts for less of the total variance. Other methods within `mixOmics` (eg. (s)PLS-DA) form their components via different means (eg. via the maximisation of covariance between components to best separate classes). Therefore, PCA is the only method where a consistent decrease in captured variance across components is *guaranteed*. 
+
+Useful links:
+
+- 1. [(s)PCA Case Study](http://mixomics.org/case-studies/spca-multidrug-case-study/)
+- 2. [(s)PLS-DA Case Study](http://mixomics.org/case-studies/splsda-srbct-case-study/)
+
+#### **How to extract the names of variables selected when performing sPLS?**
+
+In the future, a more explicit and robust way to extract the selected features will be implemented by the `mixOmics` team. Until then, there are two simple ways to achieve this. 
+
+Firstly is the use of the `plotLoadings()` function. It won't plot any features with loading values equal to 0. In contexts where the number of features used (`keepX` and `keepY`) is fairly low, the selected features can easily be read off this plot. 
+
+Secondly, the below code can be used.
+
+``` {r, eval = FALSE}
+comp = 1 # select which component you are inspecting
+which(spls.object$loadings$X[, comp] != 0) # show all features with non-zero loading values
+```
+
+To view the exact loading values for each feature in decreasing order:
+
+``` {r, eval = FALSE}
+features.to.view <- 10 # how many features do you want to look at
+
+loadingsX1 = abs(spls.object$loadings$X[, comp]) # extract the absolute loading values
+sort(loadingsX1, decreasing = TRUE)[1:features.to.view] # sort them and print out the desired quantity
+```
+
+Useful links:
+
+- 1. [(s)PLS Methods Page](http://mixomics.org/methods/spls/)
+
+## **Graphical Outputs**
+
+#### **How can I interpret the various plots provided by `mixOmics`?**
+
+This question is dependent on the type of analysis being undergone as well as the biological question under inspection. In the case studies on this site (*2-5*), there are brief interpretations and explanations on how to draw conclusions from the various plots `mixOmics` offers. Also going through the functionality of the graphcics themselves will aid in determining how to interpret them (*1*).
+
+For a deeper understanding of how to interpret a given plot, refer to this [paper](http://www.biodatamining.org/content/5/1/19).
+
+Useful links:
+
+- 1. [Graphics page](http://mixomics.org/graphics/)
+- 2. [(s)PCA Case Study](http://mixomics.org/case-studies/spca-multidrug-case-study/)
+- 3. [(s)PLS-DA Case Study](http://mixomics.org/case-studies/splsda-srbct-case-study/)
+- 4. [rCCA Case Study](http://mixomics.org/case-studies/rcca-nutrimouse-case-study/)
+- 5. [(s)PLS Case Study](http://mixomics.org/case-studies/spls-liver-toxicity-case-study/)
+
+#### **What is the difference between the `cutoff` parameter used in `plotVar()` and `network()`?**
+
+In `plotVar()`, variables with at least one coordinate (in absolute value) on any component (axes of the correlation circle plot) above of the cutoff are plotted. 
+
+In `network()`, a similarity measure between each **X** and **Y** variable is calculated.  Variable pairs with a similarity measure (in absolute value) above the threshold are plotted.
+
+The way to think about the difference between these two is that in `network()`, the `cutoff` controls which pairs of features are shown based on their association with one another. In `plotVar()`, it is the correlation of each feature and the components which `cutoff` controls.
+
+Useful links:
+
+- 1. [`plotVar()` Graphics Page](http://mixomics.org/graphics/variable-plots/plotvar/)
+- 2. [`network()` Graphics Page](http://mixomics.org/graphics/variable-plots/network/)
+
+#### **Regarding `cim()` function, can I change the distances used?**
+
+The clustering method and distance used as part of this clustering can both be adjusted via the `clust.method` and `dist.method` parameters of the `cim()` function.
+
+`clust.method` takes a character vector of length two (for rows and columns respectively). The default value is `"complete"`. All the values that `hclust()` accepts are usable as part of `cim()` (see [here](https://www.rdocumentation.org/packages/stats/versions/3.6.2/topics/hclust) for more information). 
+
+`dist.method` also takes a character vector of length two. It defaults to `"euclidean"` but can take any value which is supported by the `dist()` function (see [here](https://www.rdocumentation.org/packages/stats/versions/3.6.2/topics/dist) for more information).
+
+Useful links:
+
+- 1. [`cim()` Graphics Page](http://mixomics.org/graphics/variable-plots/cim/)
+
+#### **Regarding cim() function, how can I get the identity of the objects clustered together?**
+
+After you have created your `cim` object, the dendrogram of the columns and the rows can be visualised via `plot(cim.object$ddc)` and `plot(cim.object$ddr)` respectively. The order in which the features are clustered can be accessed via: `as.hclust(cim.object$ddr)$order`.
+
+Useful links:
+
+- 1. [`cim()` Graphics Page](http://mixomics.org/graphics/variable-plots/cim/)
+
+#### **How can I export a relevance network to Cytoscape?**
+
+Once the network plot has been produced, it should be exported to `graphml` format. Note that the `network` object has an attribute (`$gR`) which is a graph object designed for Cytoscape use. This does require loading of the `igraph` package. To export the graph, use the code below (changing the object and file name):
+
+``` {r, eval = FALSE}
+write.graph(network.result$gR, file = "network_graph.graphml", format = "graphml")
+```
+
+This network information file could then nicely be opened in Cytoscape via:
+
+- File -> Import -> Network (Multiple File Types)
+
+Note: be sure that within Cytoscape the GraphML reader plugin is installed (should be available @ Plugins -> Manage Plugins; select from Network and Attribute I/O); otherwise download from [here](http://code.google.com/p/graphmlreader/). 
+
+*This answer was provided by Guido Hooiveld (thanks!)*
+
+Useful links:
+
+- 1. [`network()` Graphics Page](http://mixomics.org/graphics/variable-plots/network/)
+
+
+## **Miscellaneous**
+
+#### **How do I cite mixOmics?**
+
+It is dependent on context, but see [here](http://mixomics.org/presentations__trashed/cite-us/) to determine which paper to cite.
+
+#### **Is there a way by which gene and metabolite connection information can be incorporated in the `mixOmics` analysis?**
+
+All the `mixOmics` methods are entirely data-driven and do not include any a priori information. Despite this, the `network()` and `cim()` functions can provide key insights into the relationships between datasets, ie. between genetic and metabolic data. 
+
+Useful links:
+
+- 1. [`cim()` Graphics Page](http://mixomics.org/graphics/variable-plots/cim/)
+- 2. [`network()` Graphics Page](http://mixomics.org/graphics/variable-plots/network/)
+
+
+#### **Why does `plsda()` return an error message even though I am using the same code as indicated in the tutorial or the help file?**
+
+This is highly likely due to a clash with another package that also provides a `plsda()` function (`caret` or `muma` for instance; the `spls` package provides a `splsda()` function) that was loaded before `mixOmics`. You can either unload these packages using the function `detach()` or use the command `mixOmics::plsda(...)` to be force the `plsda()` function from `mixOmics` to be run.
+
+
+#### **What does the error `system is computationally singular` mean when undergoing (s)PLS-DA?**
+
+There are a few different causes of this error and is context dependent. A few of the most likely sources are:
+
+- A large degree of sparsity within your data, such that there is a large number of missing or zero values. One suggestion would be to remove all features that have more than a certain threshold (eg. 20%) of zero/missing value. If this does not work, refer to the Missing Values page on the site (link directly below) on how to impute these values manually. 
+- You are trying to create a (s)PLS-DA model with too many components. This is likely to result in large, empty matrices. Try reducing the number of components within your model.
+- The features you are inputting have a high degree of multi-collinearity such that they are extremely similar in their distributions. Before generating the model, assess your features for their collinearity and remove features which are extremely similar to others. 
+
+Useful links:
+
+- 1. [Missing Values Page](http://mixomics.org/methods/missing-values/)
+
+
+#### **Why are the outputs of the `mixOmics` (s)PLS-DA method different to the output of packages such as`DiscriMiner`, `SIMCA` and `ropls`?**
+
+Users have noted that the $R^{2}$, $Q^{2}$, loading values and error rates of (s)PLS-DA models are different when using these different packages compared to the `mixOmics` version. In the case of `SIMCA`, it is hard to tell as they have not publicly released the algorithm they use. The algorithm proposed by [Wold et al., 2001](https://www.sciencedirect.com/science/article/abs/pii/S0169743901001551?via%3Dihub) is what is used by `mixOmics`. This also involves norming the **X** and dummy encoded **Y** dataframes.
+
+Irrespective of the algorithm used by these packages, there are going to be inherent differences induced by differing folds during the cross-validation procedure and the prediction formula used by these packages. Also, we are unaware of whether these packages centre and scale the data (as `mixOmics` does).
+

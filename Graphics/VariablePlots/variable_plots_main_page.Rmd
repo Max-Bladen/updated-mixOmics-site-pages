@@ -1,0 +1,31 @@
+---
+#title: "variable_plots_main"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, echo= TRUE, warning=FALSE, message=FALSE, #dev = 'jpeg',
+                      fig.show=TRUE, fig.keep = 'all', fig.height= 8, fig.width=9)
+```
+
+# Variable plots
+
+## Overview
+
+`mixOmics` contains several graphical functions to better the understanding of the importance of specific variables within a given dataset. These can be used to visualise the relationship of variables and components or how the components are constructed from the original variables.
+
+[`plotLoadings()` - Loadings Bar Plot](http://mixomics.org/graphics/sample-plot/plotloadings/) - this function can be used to visualise the the loading vectors for a given component. A barplot is produced, with each bar representing the weight of each original variable's contribution. The loading plot is appropriate to use for most dimension reduction methods in `mixOmics`.
+
+[`plotVar()` - Correlation Circle Plot](http://mixomics.org/graphics/sample-plot/plotvar/) – this function can be used to show the correlation between original variables with two (or three) selected components. This plot also provides information on how the variables are correlated to one another. Correlation circle plots are appropriate to use for PCA, CCA and PLS methods in `mixOmics`.
+
+[`biplot()` - Biplot](http://mixomics.org/graphics/sample-plot/biplot/) - this function is similar to the `plotVar()` function, with the added capability of showing the projection of the samples within the same graph. This can indicate how certain variables explain certain samples. This is appropriate to use for PCA and PLS methods in `mixOmics`.
+
+[`cim()` - Clustered Image Map](http://mixomics.org/graphics/variable-plots/cim/) (CIM) – this function generates colour-coded Clustered Image Maps (CIMs), which are heat-maps, to  represent high-dimensional data sets. A single dataset or multiple datasets can be represented using the CIM, meaning this function is appropriate in single omics and two dataset integration contexts. 
+
+[`network()` - Relevance Network Graph](http://mixomics.org/graphics/variable-plots/network/) – this function can be used to depict the assocaitions between pairs of variables (across two omics datasets). Complex correlation structures and variable clustering can be visualised. This is appropriate to be used in any two dataset integration context.
+
+[`circosPlot()` - Circos Plot](http://mixomics.org/graphics/sample-plot/circos/) - this function can depict the association between variables from multiple datasets by drawing lines between associated variables (represented by points on a circle). This is an extension of the relevance networks and CIMs for N-integrative contexts (more than two datasets measured on the same samples). 
+
+

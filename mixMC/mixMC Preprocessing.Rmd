@@ -1,0 +1,298 @@
+---
+#title: "MixMC Preprocessing"
+output: html_document
+
+---
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, echo= TRUE, warning=FALSE, message=FALSE, fig.align = 'center',
+                      fig.show=TRUE, fig.keep = 'all')
+```
+
+# MixMC Pre-processing
+
+Due to the sparse and compositional nature of microbiome data, there are specific pre-processing steps which need to be undergone in order to avoid spurious results. The `mixOmics` package contains functions to allow for this data wrangling. The Koren bodysite dataset is used for this example.
+
+*Note: there is a section below which explains how to deal with `phyloseq` objects specifically.*
+
+
+
+## General Process
+
+There are three primary steps involved in this process:
+
+1. Add an offset of 1 to the whole data matrix to deal with zeroes after centered log ratio transformation
+2. Pre-filter the raw count data to remove features with low counts across all samples
+3. Centered log-ratio (CLR) transformation
+
+*Note: Steps 1 and 2 can be interchanged as the pre-filtering is based on a percentage of total counts.*
+
+## R script
+
+The R script used for all the analysis in this case study is available [here](http://mixomics.org/wp-content/uploads/2022/01/mixMC-Preprocessing.zip).
+
+## To begin
+
+Load the latest version of mixOmics. Note that the seed is set such that all plots can be reproduced. This should **not** be included in proper use of these functions.
+
+```{r}
+library(mixOmics) # import the mixOmics library
+
+set.seed(5249) # for reproducibility, remove for normal use
+```
+
+### The data
+
+The Koren bodysite dataset derives from an examination of the link between oral, gut and plaque microbial communities in patients with atherosclerosis (vs. controls).
+
+The `mixOmics` Koren dataset is accessed via `Koren.16S` and contains the following:
+
+- `Koren.16S$data.TSS` (continuous matrix): 43 rows and 980 columns. The pre-filtered normalised data using Total Sum Scaling normalisation.
+- `Koren.16S$data.raw` (continuous matrix): 43 rows and 980 columns. The prefiltered raw
+count OTU data which include a 1 offset (i.e. no 0 values).
+- `Koren.16S$taxonomy` (categorical matrix): 980 rows and 7 columns. Contains the taxonomy (ie. Phylum, ... Genus, Species) of each OTU.
+- `Koren.16S$indiv` (categorical matrix): 43 rows and 22 columns. Contains all the sample meta data recorded.
+- `Koren.16S$bodysite` (categorical vector): factor of length 43 indicating the bodysite with levels `arterial plaque`, `saliva` and `stool`.
+
+``` {r}
+data("Koren.16S") # extract the microbial data
+
+data.offset <- Koren.16S$data.raw
+```
+
+## Step 1: Applying the offset
+
+As can be seen above, the offset has actually already been applied to this dataset, such that `data.raw = raw counts + 1`. However, this is unlikely to be the case for all data. The offset is very necessary as the last step involves applying a CLR transformation - log transformations cannot be done on zeroes. Note that after the transformation there will be zeroes present in the data, but this cannot be the case prior to the CLR transformation. 
+
+A simple way to achieve this offset is as follows:
+
+``` {r, eval = FALSE}
+data.offset <- data.offset + 1 # apply offset
+```
+
+A concise way to determine that there aren't any zeroes in the dataset is the following line. If it returns `0` then the offset has been correctly applied.
+
+``` {r}
+sum(which(data.offset == 0)) # how many zeroes are there after offset
+```
+
+## Step 2: Pre-filtering
+
+This step involves removing OTUs (features) for which the sum of counts are below a certain threshold compared to the total sum of all counts. The function is given below and was adapted from Arumugam et al., (2011) [3]. 
+
+``` {r}
+low.count.removal <- function(
+                        data, # OTU count df of size n (sample) x p (OTU)
+                        percent=0.01 # cutoff chosen
+                        ) 
+  {
+    keep.otu = which(colSums(data)*100/(sum(colSums(data))) > percent)
+    data.filter = data[,keep.otu]
+    return(list(data.filter = data.filter, keep.otu = keep.otu))
+}
+```
+
+Prior to use of this function, ensure that the rows of the dataframe represent samples and the columns represent OTUs. 
+
+``` {r}
+dim(data.offset) # check samples are in rows
+```
+
+Once this is confirmed, the `low.count.removal()` function should be applied on the entire dataframe. Note that the data being used was also already pre-filtered, so there will be no change in OTU count in this example.
+
+``` {r}
+# call the function then apply on the offset data
+result.filter <- low.count.removal(data.offset, percent=0.01)
+data.filter <- result.filter$data.filter
+
+# check the number of variables kept after filtering
+# in this particular case we had already filtered the data so no was change made, 
+# but from now on we will work with 'data.filter'
+length(result.filter$keep.otu) 
+```
+
+In other examples (see [1]) there were 43,146 OTUs prior to pre-filtering. After pre-filtering, there were only 1,674 OTUs. While this pre-filtering may appear drastic (and is highly dependent on the bioinformatics steps performed beforehand, such as OTU picking), it will avoid spurious results in the downstream statistical analysis. The threshold (in this case `percent = 0.01`) is case specific and should be experimented with.
+
+An extra step that is recommended is to check how heterogeneous the library sizes are per sample. Here the sum of all counts **per sample** is calculated and represented in a barplot (Figure 1).
+
+``` {r}
+lib.size <- apply(data.filter, 1, sum) # determine total count for each sample
+barplot(lib.size) # and plot as bar plot
+```
+
+<p style="text-align: center;">FIGURE 1: Barplot of the library size of each sample from the Koren OTU data.</p>
+
+Depending on the context, samples with extremely large library sizes may be desired to be removed as each sample should be relatively similar in size. This can be achieved via the following:
+
+``` {r, eval = FALSE}
+maximum.lib.size <- 15000
+
+data.filter <- data.filter[-which(lib.size > maximum.lib.size),]
+```
+
+*Note: that in this example this code to remove outliers is not run.*
+
+## Step 3: Centered Log Ratio (CLR) Transformation
+
+For technical, biological and computational reasons, microbiome data is compositional such that they represent proportions or relative information. Total Sum Scaling (TSS) is often used to calculate proportions from compositional data. Proportional data are restricted to a space where the sum of all OTU proportions for a given sample sums to 1. Using standard statistical methods on such data may lead to spurious results. Likewise, any data that are compositional in nature are interpreted into relative counts. Hence, using a CLR transformation allows the circumvention of these spurious results (explained in more dpeth in [4]).
+
+There are two ways of log-ratio transforming the data in mixOmics:
+
+- Option 1: Some of our functions (`pca`, `plsda`) directly include the argument `logratio = 'CLR'`, so all you need to do is include your filtered offset data and add this argument (see example below).
+- Option 2: Some functions currently do not include the `logratio` argument. In this case, you will need to use the `logratio.transfo()` function as shown below. You can also use this function if you only have access to TSS (proportions) data and those were not offset.
+
+## Undergoing a PCA
+
+### Option 1
+
+``` {r}
+# undergo PCA on CLR transformed data
+pca.result <- pca(data.filter, logratio = 'CLR') 
+
+plotIndiv(pca.result,  # plot samples
+          group = Koren.16S$bodysite, 
+          title = 'Koren, PCA Comps 1&2',
+          legend = TRUE)
+```
+
+<p style="text-align: center;">FIGURE 2: Samples of Koren OTU data projected onto components after a CLR transformation (done within the `pca()` function).</p>
+
+### Option 2 
+
+The following line will correctly apply a CLR transformation in the scenario where methods without the `logratio` parameter are being used:
+
+``` {r}
+# undergo CLR transformation
+data.clr <- logratio.transfo(as.matrix(data.filter), 
+                             logratio = 'CLR', offset = 0) 
+```
+
+The argument `offset` is set to 0 here as zeroes in the dataframe were already dealt with (in step 1). In the case where one only has access to TSS data and not raw OTU counts, there is likely to still be zeroes in the data (as no offset is appled). In this situation, the `offset` parameter of the `logratio.transfo()` function can be used to prevent any issues with a log transform of a zero value.
+
+``` {r}
+pca.clr <- pca(data.clr) # undergo PCA on CLR transformed data
+
+plotIndiv(pca.clr,  # plot samples
+          group = Koren.16S$bodysite, 
+          title = 'Koren, PCA Comps 1&2',
+          legend = TRUE)
+```
+
+<p style="text-align: center;">FIGURE 3: Samples of Koren OTU data projected onto components after a CLR transformation (done prior to calling the `pca()` function).</p>
+
+The two `arterial plaque` samples which stand out (`Plaque 235` & `Plaque244`) are those which would have been removed at the end of step 2. Despite the scaling, these two points are still outliers.
+
+## Pre-processing with a **phyloseq** object
+
+Some microbiome data may derive from the `phyloseq` package. While this is ultimately compatible with the `mixOmics` methods, there is a bit of extra pre-processing that needs to be done first. A big thank you to Ms Laetitia Cardona from INRAE for writting the following code. 
+
+First, the OTU, taxonomy and meta data are extracted.
+
+*Note: Ensure that you are using the latest version of R when using the `phyloseq` package.*
+
+``` {r}
+library(phyloseq)
+data(GlobalPatterns) # load the data from the phyloseq package
+
+taxo <- tax_table(GlobalPatterns) # extraction of the taxonomy
+
+meta.data <- GlobalPatterns@sam_data # extraction of the metadata
+
+# extract OTU table from phyloseq object
+# samples should be in row and variables in column
+data.raw <- t(otu_table(GlobalPatterns)) 
+```
+
+Then, the offset is applied.
+
+``` {r}
+# STEP 1: OFFSET
+
+data.offset <- data.raw+1
+sum(which(data.offset == 0)) # check how many zeroes there are
+```
+
+The dimensions of this large dataframe is checked:
+
+```{r}
+dim(data.offset) # check dimensions
+```
+
+This is followed by removal of all OTUs with a low total count. This leave 988 OTUs.
+
+``` {r}
+# STEP 2: PRE-FILTER
+
+# remove low count OTUs
+result.filter <- low.count.removal(data.offset, percent=0.01) 
+data.filter <- result.filter$data.filter
+length(result.filter$keep.otu) # check how many OTUs remain
+```
+
+Lastly, we need to remove any outliers.
+
+``` {r, eval = FALSE}
+lib.size <- apply(data.filter, 1, sum) # determine size of each library
+
+# remove samples which exceed max library size (15000)
+maximum.lib.size <- 15000
+data.filter <- data.filter[-which(lib.size > maximum.lib.size),] 
+```
+
+Now a PCA can be undergone. Ensure that the `logratio` parameter is passed in to complete the third step of pre-processing.
+
+``` {r}
+# undergo PCA after CLR transformation
+pca.result <- pca(data.filter, logratio = 'CLR') 
+
+# plot samples
+plotIndiv(pca.result, group = meta.data$SampleType, 
+          title = 'Global Patterns, PCA Comps 1&2') 
+```
+
+<p style="text-align: center;">FIGURE 4: Samples of Global Pattern OTU data projected onto components after a CLR transformation.</p>
+
+## FAQ
+
+#### Can I apply another **mixOmics** method (multivariate or univariate) on the CLR data?
+
+Any method which does not use the `logratio` parameter is appropriate to use on microbiome data as long as the `logratio.transfo()` is applied prior. Remember to apply the offset (step 1) prior to this to avoid having to use the small offset within this function. **The CLR is abolsutely crucial when dealing with compositional data!** That, or the statistical method needs to account for this compositionality, see [5]. 
+
+#### Can I apply a CSS normalisation instead?
+
+Cumulative Sum Scaling (CSS) normalisation was developed for sparse sequencing count data [6]. CSS is an extension of the quantile normalisation procedure. It consists of a cumulative sum that increases up until a percentile determined using a data-driven approach. CSS corrects the bias in the assessment of differential abundance introduced by TSS and, according to the authors, would partially account for compositional data. Therefore, for CSS normalised data, no log-ratio transformation is applied as it is considered that this normalisation method does not produce compositional data *per se*. A simple log transformation is then applied.
+
+The code to undergo CSS normalisation is found directly below:
+
+``` {r, eval = FALSE}
+library(metagenomeSeq)
+
+data.metagenomeSeq = newMRexperiment(t(data.filter), # using filtered data
+                      featureData=NULL, libSize=NULL, normFactors=NULL) 
+p = cumNormStat(data.metagenomeSeq) # default is 0.5
+data.cumnorm = cumNorm(data.metagenomeSeq, p=p)
+
+data.CSS = t(MRcounts(data.cumnorm, norm=TRUE, log=TRUE))
+
+# ensure the data are in a correct format: number of samples in rows
+dim(data.CSS)  
+```
+
+
+
+
+
+
+## References
+
+1. [Lê Cao KA, Costello ME, Lakis VA, Bartolo F, Chua XY, et al. (2016) MixMC: A Multivariate Statistical Framework to Gain Insight into Microbial Communities. PLOS ONE 11(8): e0160169. doi: 10.1371/journal.pone.0160169](http://journals.plos.org/plosone/article/metrics?id=10.1371/journal.pone.0160169)
+
+2. [Koren O., Spor A., Felin J., Fak F., Stombaugh J., Tremaroli V., et al.: Human oral, gut, and plaque microbiota in patients with atherosclerosis. Proceedings of the National Academy of Sciences 108(Suppl 1), 4592-4598 (2011)](https://www.pnas.org/content/108/Supplement_1/4592)
+
+3. [Arumugam M., Raes J., Pelletier E., Le Paslier D., Yamada T., Mende D.R., et al.: Enterotypes of the human gut microbiome. Nature 473 (7346), 174–180 (2011)](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3728647/)
+
+4. [Aitchison, J., 1982. The statistical analysis of compositional data. Journal of the Royal Statistical Society. Series B (Methodological), pp.139-177.](https://www.jstor.org/stable/2345821?seq=1)
+
+5. [Pawlowsky-Glahn V, Egozcue J, Tolosana-Delgado R (2015) Modeling and Analysis of Compositional Data, Wiley](https://www.wiley.com/en-us/Modeling+and+Analysis+of+Compositional+Data-p-9781118443064)
+
+6. [Paulson, J. N., Stine, O. C., Bravo, H. C., & Pop, M. (2013). Differential abundance analysis for microbial marker-gene surveys. Nature methods, 10(12), 1200–1202. https://doi.org/10.1038/nmeth.2658](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4010126/)

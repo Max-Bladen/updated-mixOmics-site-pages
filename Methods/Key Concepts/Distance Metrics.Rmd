@@ -1,0 +1,115 @@
+---
+#title: "Distance Metrics"
+output: html_document
+---
+
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, 
+                      echo= TRUE, 
+                      warning=FALSE, 
+                      message=FALSE, 
+                      fig.show=TRUE, 
+                      fig.keep = 'all', 
+                      fig.align = "center",
+                      out.width = "70%")
+```
+
+# Distance Metrics
+
+Within `mixOmics`, the `predict()`, `tune()` and `perf()` functions all assign new observations a predicted class. In these cases, a categorical, supervised algorithm ([(s)PLS-DA](http://mixomics.org/methods/spls-da/), [DIABLO](http://mixomics.org/mixdiablo/), [MINT (s)PLS-DA](http://mixomics.org/mixmint/)) is being used. There is no one set way of determining which class is the most appropriate to assign to a new sample. This package implements three differents metrics to use: 
+
+* `max.dist`,
+* `centroids.dist`, and
+* `mahalanobis.dist`.
+
+## Classification in *mixOmics*
+
+Prior to determining which of these metrics is valid to use in a given context, the functionality of these within the package should be discussed. When undergoing any form of classification, there is an outcome vector (**$y$**) of length $N$ with $K$ levels. Internally, this is "dummy" encoded into matrix **$Y$** of size $N$ x $K$ where each column represents one outcome level. Each row of this matrix will contain all `0`'s except for in the column that corresponds to the outcome level of that sample (it will contain a `1` in this cell). 
+
+In a three class problem (classes: `A`, `B` and `C`), **$y$** will look something like the vector below:
+
+``` {r, echo = FALSE}
+y <- c("A", "B", "A", "C", "C", "A", "C", "B", "A", "A")
+
+dummy.y <- data.frame(matrix(0, nrow = 10, ncol = 3))
+colnames(dummy.y) <- c("A", "B", "C")
+
+dummy.y[, "A"] <- ifelse(y == 'A', 1, 0)
+dummy.y[, "B"] <- ifelse(y == 'B', 1, 0)
+dummy.y[, "C"] <- ifelse(y == 'C', 1, 0)
+```
+
+``` {r}
+y
+```
+
+When this outcome is dummy encoded, the matrix representation looks like:
+
+``` {r}
+dummy.y
+```
+
+When a supervised model (eg. PLS-DA) is handed a set of novel samples, it will generate **$Y_{new}$**. This new matrix mimics **$Y$** in its structure but instead of `1`'s and `0`'s, each cell contains a score based on the likelihood of that sample belonging to each class.
+
+In an example where there are 5 novel samples, the internal **$Y_{new}$** would look something like:
+
+
+``` {r, echo = FALSE}
+Y.new <- data.frame(matrix(0, nrow = 5, ncol = 3))
+colnames(Y.new) <- c("A", "B", "C")
+
+Y.new[1,] <- c(0.4161, 0.6158, 0.9278)
+Y.new[2,] <- c(0.6580, 0.1450, 0.9388)
+Y.new[3,] <- c(0.5796, 0.3854, 0.1769)
+Y.new[4,] <- c(0.3553, 0.0631, 0.1110)
+Y.new[5,] <- c(0.2315, 0.1139, 0.1196)
+```
+
+``` {r}
+Y.new
+```
+
+There is also the **$T_{pred}$** matrix which is yielded when undergoing classification. This matrix represents the *predicted components* of each of the new samples and is of size $N_{new}$ x $H$ where $N_{new}$ is the number of novel samples and $H$ is the number of components in the model. 
+
+## The *max.dist* metric
+
+This is the simplest and most intuitive approach for predicting the class of a test sample. For each new sample, the class with the largest predicted score ('dummy score') is the assigned class. This metric performs quite well in single dataset analysis contexts (with multiple classes) but loses efficacy when used in other problems. 
+
+The predictions of the samples in the example **$Y_{new}$** above would be:
+
+``` {r, echo = FALSE}
+max.dist.pred <- c("C", "C", "A", "B", "A")
+```
+
+``` {r}
+max.dist.pred
+```
+
+
+## The *centroids.dist* metric
+
+This metric is less obvious in how it is calculated but is more robust than `max.dist`. First, for each of the $K$ classes, the centroid ($G_{k}$) is calculated using all the training samples associated with that class. The values of these samples on the $H$ components are used to yield $G_{k}$. 
+
+Using the values in **$T_{pred}$**, each test sample has the Euclidean distance to each $G_{k}$ calculated. The centroid that minimises this distance (within the $H$ component space) is the class that is assigned to that sample. 
+
+Classifications made using this metric are less susceptible to outliers within the training set. This metric is best used when the classes cluster moderately well - which can be determined by plotting the samples via the `plotIndiv()` function. 
+
+## The *mahalanobis.dist* metric
+
+This last metric is very similar to the `centroids.dist` metric. The centroids are all calculated based on the position of each training sample in the $H$ component space. Then, each test sample's projection onto the components has its distance from each centroid calculated. However, this metric uses the Mahalanobis distance rather than the Euclidean distance. This distance takes into account the correlation between each of the components, giving more weight to less correlated components [1]. 
+
+# Comparing the distance metrics
+
+The below figures utilise the `background.predict()` function in order to produce the coloured sample plots. For a breakdown of the usage of this function (and the source of the figures), refer to the [sPLS-DA SRBCT Case Study](http://mixomics.org/case-studies/splsda-srbct-case-study/). 
+
+The performance of each metric on partitioning the space spanned by the two components into regions for each class is seen in Figure 1. Depending on the degree to which each class clusters, the different distance metrics perform better or worse. For instance, the `EWS` class (blue) samples are all found in the correct region when using maximum distance. The non-linear boundary produced by the Mahalanobis distance leaves one `EWS` sample in the wrong region. However, the Mahalanobis distance yields much more specific boundaries and only misclassifies this single sample across all classes. 
+
+<img src="http://mixomics.org/wp-content/uploads/2021/12/Key-Concepts-Distance-Plots.png" alt="newplot" style="max-width: 100%"/>
+<figcaption style="text-align: center">FIGURE 1: Prediction areas associated with each of the three different distance metrics for a sPLS-DA model run on the SRBCT data. The title of each figure represents the distance metric used for that predictive background.</figcaption>
+
+
+
+# References
+
+1. [Mahalanobis, P.C. (1936) "On the Generalised Distance in Statistics.". Sankhya A 80, 1–7 (2018). https://doi.org/10.1007](https://link.springer.com/article/10.1007/s13171-019-00164-5#citeas)

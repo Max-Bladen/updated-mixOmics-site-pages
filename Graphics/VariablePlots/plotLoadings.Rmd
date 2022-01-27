@@ -1,0 +1,85 @@
+---
+#title: "plotLoadings"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, echo= TRUE, warning=FALSE, message=FALSE, #dev = 'jpeg',
+                      fig.show=TRUE, fig.keep = 'all', fig.height= 6, fig.width=7)
+```
+
+# **plotLoadings()** - Loadings Bar Plot
+
+When undergoing most dimension reduction methods in the `mixOmics` package, latent components are produced. These latent components are defined by their corresponding loading vectors, which are vectors with the weight of each original variable's contribution to the corresponding latent component. Greater absolute values in this loading vector means that a given variable has a greater "importance". 
+
+The `plotLoadings()` function allows for the visualisation of this importance using a bar plot, where the most relevant original variables (those with the greatest absolute loading value) will be at the bottom of the plot. It can generate a few different types of plot depending on the context. If the sparse variant of a method is used, only the selected variables will be shown.
+
+The parameters of this function are not complicated and are homogeneous with most of the other plotting functions within the package. For more information, use `?plotArrow` in the R console.
+
+``` {r}
+library(mixOmics)
+data(nutrimouse)
+```
+
+## **plotLoadings()** in Single Omics
+
+This is the most straight forward context to use this function. For example, when undergoing PCA, the function can be used to see how each original variable contributes to a selected set of principal components. Figure 1 shows the loading values for the first two components produced by PCA (controlled by the `comp` parameter).
+
+``` {r, fig.show='hold', out.width = '49%'}
+X <- nutrimouse$lipid # extract the lipid concentration data
+
+pca.nutri <- pca(X, ncomp = 2) # undergo pca method
+
+plotLoadings(pca.nutri) # plot the bar plot for the first principal component
+
+# plot the bar plot for the second principal component
+plotLoadings(pca.nutri, comp = 2) 
+```
+
+<p style="text-align: center;">FIGURE 1: Loading plot from the PCA applied to the nutrimouse lipid data on the first and second Principal Components.</p>
+
+## **plotLoadings()** in Unsupervised Multi Omics
+
+When integrating multiple datasets, latent components are produced for each dataset. `plotLoadings()` handles this by producing a plot for each variable type for a given dimension. Figure 2 depicts how this function operates in a PLS context. Note that both plots are for just the first dimension, but one for each dataset. 
+
+``` {r, fig.align = "center"}
+Y <- nutrimouse$gene # extract the gene expression data
+
+pls.nutri <- pls(Y, X, ncomp = 2) # udnergo the pls method
+
+# plot the bar plot for the pls produced components
+plotLoadings(pls.nutri, subtitle = c('Lipids on Dim 1', 'Genes on Dim 1'))
+```
+
+<p style="text-align: center;">FIGURE 2: Loading plots from the PLS applied to the nutrimouse lipid and gene data. Lipids and genes at the bottom of the plot are likely to be highly correlated</p>
+
+## **plotLoadings()** in Supervised Single Omics
+
+If undergoing classification, as in (s)PLS-DA, `plotLoadings()` can colour each variable's bar according to whether the mean (or median) is higher (or lower) in a given group of interest. In other words, the colour of a feature corresponds to which class has the higher (or lower) mean (or median)  for that given variable.
+
+The `contrib` parameter controls whether the bars are coloured according to which class has the maximised (`contrib = 'max')` or minimised (`contrib = 'min'`) value selected by the `method` parameter.
+
+The `method` parameter controls which metric is used for this colouring. It can be the median (`method = 'median'`) or the mean (`method = 'mean'`). For skewed data, it is recommended to use the `median`. 
+
+``` {r, fig.align = "center"}
+Y <- nutrimouse$genotype # change Y dataframe to the class vector
+
+plsda.nutri.lipid <- plsda(X, Y) # undergo the plsda method
+
+# plot the bar plot using the highest value of the median to colour the bars
+plotLoadings(plsda.nutri.lipid, contrib = 'max', method = 'median') 
+```
+
+<p style="text-align: center;">FIGURE 3:  Loading plot from the PLS-DA applied to the nutrimouse lipid data to discriminate genotypes. Colours indicate the genotype in which the median is maximum for each lipid</p>
+
+# Case Studies
+
+Refer to the following case studies for a more in depth look at generating and interpreting the output of the `plotLoadings()` function:
+
+- [sPLS-DA - SRBCT](http://mixomics.org/case-studies/splsda-srbct/)
+- [N-Integration - TCGA](http://mixomics.org/mixdiablo/diablo-tcga-case-study/)
+- [P-Integration - Stem cells](http://mixomics.org/mixmint/mint-stem-cells-case-study/)
+
+

@@ -1,0 +1,237 @@
+---
+#title: "rCCA Nutrimouse Case Study"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, echo= TRUE, warning=FALSE, message=FALSE,
+                      fig.show=TRUE, fig.keep = 'all', out.width = '90%')
+```
+
+# Case Study of rCCA with Nutrimouse dataset
+
+Canonical Correlation Analysis (CCA) and its regularised counterpart (rCCA) are multivariate, integrative methods used to analyse the correlation structure between two datasets. While similar to PLS, it looks to maximise the correlation between *canonical variates* in order to reduce dimensionality.
+
+For background information on the rCCA method, refer to the [CCA Methods Page](http://mixomics.org/methods/rcca/).
+ 
+# Rscript
+
+The R script used for all the analysis in this case study is available [here](http://mixomics.org/wp-content/uploads/2022/01/rCCA-Nutrimouse-Case-Study.zip). 
+ 
+## To begin
+
+Load the latest version of mixOmics. Note that the seed is set such that all plots can be reproduced. This should **not** be included in proper use of these functions.
+
+```{r}
+library(mixOmics) # import the mixOmics library
+
+set.seed(5249) # for reproducibility, remove for normal use
+```
+
+### The data
+
+The nutrimouse data contains the expression measure of 120 genes potentially involved in nutritional problems and the concentrations of 21 hepatic fatty acids for forty mice (Martin et al., 2007). 
+
+The `mixOmics` nutrimouse dataset is accessed via `nutrimouse` and contains the following:
+
+* `nutrimouse$gene` (continuous matrix): 40 rows and 120 columns. Expression levels of 120 genes measured in liver cells, selected (among about 30,000) as potentially relevant in the context of the nutrition study.
+* `nutrimouse$lipid` (continuous matrix): 40 rows and 21 columns. Concentration (in percentage) of 21 hepatic fatty acids measured by gas chromatography
+* `nutrimouse$genotype` (binary vector): 40 rows. Contains binary indicator whether the corresponding mouse had the wildtype or PPAR -/- genotype. 
+* `nutrimouse$diet` (categorical vector): 40 rows. Oils used for experimental diets were: corn and colza oils (50/50) for a reference diet (REF), hydrogenated coconut oil for a saturated fatty acid diet (COC), sunflower oil for an Omega6 fatty acid-rich diet (SUN), linseed oil for an Omega3-rich diet (LIN) and corn/colza/enriched fish oils for the FISH diet (43/43/14).
+
+To confirm the correct dataframes were extracted, the dimensions of each are checked.
+
+``` {r}
+data(nutrimouse)
+X <- nutrimouse$lipid # extract all lipid concentration variables
+Y <- nutrimouse$gene # extract all gene expression variables
+
+dim(X) # check the dimensions of the X dataframe
+dim(Y) # check the dimensions of the Y dataframe
+```
+
+## Initial Analysis
+
+### Exploration of feature correlation
+
+A good stepping off place is to look at the raw correlations between the total set of features (both inter-dataset and intra-dataset). The heatmap in Figure 1 utilises the `imgCor()` function. This image provides a good insight into the correlation structure of each data set both together but also separately (indicated by the purple (**X**) and green (**Y**) rectangles). The color key indicates the range of negative (blue) to positive (red) correlations. For example, the genetic expression data features are largely positively correlated with one another, while the correlations between the two datasets are fairly variable in magnitude and direction.  
+
+``` {r, eval = FALSE}
+# produce a heat map of the cross correlation matrix
+imgCor(X, Y, sideColors = c("purple", "green")) 
+```
+
+<img src="http://mixomics.org/wp-content/uploads/2022/01/rCCA-Feature-Correlation-Heat-Map.png" alt="newplot" style="max-width: 80%; display: block; margin: auto;"/>
+
+<p style="text-align: center;">FIGURE 1:  Cross-correlation matrix in the nutrimouse study between the gene and lipid data sets. Note that the representation is symmetrical around the diagonal, so we only need to interpret the upper or lower side of this plot.</p>
+
+## Initial rCCA model
+
+Unlike the other methods in the `mixOmics` package, there is actually no need to form a basic model for tuning. Optimisation (in the form of regularisation) is done externally using the `tune.rcc()` function or within the `rcc()` function. 
+
+## Tuning rCCA
+
+### Selecting the regularisation Method
+#### The **method** Parameter
+
+
+The regularisation method can be selected based on the dataset sizes and available time. Using the `ridge` method can be long and costly on large datasets, but takes into account the cross-correlations between the datasets. This method requires the usage of the `tune.rcc()` function to optimise $\lambda1$ and $\lambda2$. 
+
+Utilising the `shrinkage` method will save time and is implemented within the `rcc()` function. This is much more appropriate for large-scale datasets, with the drawback that the $\lambda1$ and $\lambda2$ will be optimised independently of one another. 
+
+##### Using the Cross-Validation (**ridge**) Method 
+
+This method utilises a grid search functionality to optimise $\lambda1$ and $\lambda2$ through the `tune.rcc()` function. By default, the grid is quite coarse ([0.001, 1] split evenly into five values for both $\lambda1$ and $\lambda2$). The granularity of the grid may need to be tweaked by the user. 
+
+`tune.rcc()` will produce a heatmap that can be used to select $\lambda1$ and $\lambda2$, where the highest cross-validated score is desired. This can be seen in Figure 2. 
+
+
+``` {r, out.width='80%', fig.align = "center"}
+# set grid search values for each regularisation parameter
+grid1 <- seq(0.001, 0.2, length = 10) 
+grid2 <- seq(0.001, 0.2, length = 10)
+
+# optimise the regularisation parameter values
+cv.tune.rcc.nutrimouse <- tune.rcc(X, Y, grid1 = grid1, grid2 = grid2, 
+                                   validation = "loo") 
+```
+
+<p style="text-align: center;">FIGURE 2: Heatmap of lambda1 and lambda2 values coloured by the resulting cross-validation score</p>
+
+The `opt.lambda1` and `opt.lambda2` components can be used to directly select the best parameter choice from the output of `tune.rcc`, as follows:
+
+``` {r}
+cv.tune.rcc.nutrimouse # examine the results of CV tuning
+
+opt.l1 <- cv.tune.rcc.nutrimouse$opt.lambda1 # extract the optimal lambda values
+opt.l2 <- cv.tune.rcc.nutrimouse$opt.lambda2
+
+# formed optimised CV rCCA
+CV.rcc.nutrimouse <- rcc(X, Y, method = "ridge", 
+                         lambda1 = opt.l1, lambda2 = opt.l2) 
+```
+
+##### Using the Shrinkage (**shrinkage**) Method
+
+This method is integrated within the `rcc()` function, therefore does not require the use of `tune.rcc()`. The exact tuned values of $\lambda1$, $\lambda2$ can be extracted through the `$lambda` component of the `rcc` object. 
+
+``` {r}
+# run the rCCA method using shrinkage
+shrink.rcc.nutrimouse <- rcc(X,Y, method = 'shrinkage') 
+# examine the optimal lambda values after shrinkage 
+shrink.rcc.nutrimouse$lambda 
+```
+
+
+### Selecting the number of components
+#### The **ncomp** Parameter
+
+The maximum number of producible pairs of canonical variates is $min(P, Q)$, where $P$ and $Q$ are the number of features in the **X** and **Y** datasets respectively. Canonical correlations for each pair of canonical variates can be plotted using a barplot. A steep drop off in canonical correlation indicates less useful pairs of canonical variates (ie. the 'elbow' method).
+
+Barplots for each regularisation method is shown below in Figure 3. While less explicit in the shrinkage method plot, a choice of three dimensions would be appropriate in each case.
+
+```{r, fig.show='hold', out.width = '49%'}
+# barplot of cross validation method rCCA canonical correlations
+plot(CV.rcc.nutrimouse, type = "barplot", main = "Cross Validation") 
+
+# barplot of shrinkage method rCCA canonical correlations
+plot(shrink.rcc.nutrimouse, type = "barplot", main = "Shrinkage") 
+```
+
+<p style="text-align: center;">FIGURE 3: Barplots showing canonical correlation values for each novel dimension. Left diagram depicts values using the cross-valiation method, right diagram depicts values using shrinkage method</p>
+
+## Final Model
+
+The two models generated above are both adequate. However, in the case of the ridge method it is recommended to repeat the tuning step multiple times, increasing the resolution of tested lambda values to reach an optimum. 
+
+## Plots
+
+### Sample Plots
+
+rCCA is an unsupervised approach that focuses on maximising the correlation between the two data sets **X** and **Y** and therefore the information about the treatments or groups is not taken into account in the analysis. In Figure 4, the different treatments are coloured to illustrate how the samples are clustered on the sample plot. Both methods' first variate seem to separate the genotype quite well (indicated by `wt` and `ppar`). The shrinkage method seems better at characterising the `coc` diet, but not the other types of diets. It is hard to determine qualitatively which of these plots is "better" - i.e. which method would be better to use on this data. 
+
+``` {r, fig.show = "hold", out.width = "49%"}
+# plot the projection of samples for CV rCCA data
+plotIndiv(CV.rcc.nutrimouse, comp = 1:2, 
+          ind.names = nutrimouse$genotype,
+          group = nutrimouse$diet, rep.space = "XY-variate", 
+          legend = TRUE, title = '(a) Nutrimouse, rCCA CV XY-space')
+
+# plot the projection of samples for shrinkage rCCA data
+plotIndiv(shrink.rcc.nutrimouse, comp = 1:2, 
+          ind.names = nutrimouse$genotype,
+          group = nutrimouse$diet, rep.space = "XY-variate", 
+          legend = TRUE, title = '(b) Nutrimouse, rCCA shrinkage XY-space')
+```
+
+<p style="text-align: center;">FIGURE 4: rCCA sample plots from the CV (a) or shrinkage (b) method. Canonical variates corresponding to each data set are first averaged using the argument `rep.space = 'XY-variate'`. Samples are projected into the space spanned by the averaged canonical variates and coloured according to genotype information.</p>
+
+The next sample plot to utilise is the arrow plot. From this, the relation between each sample's projection into each dataset's variate space can be evaluated. The start of each arrow represents the sample's position in the space spanned by the **X** variates while the tip represents its position in the **Y** variate space. The longer each arrow, the higher the disparity between the datasets. The shrinkage method, shown in Figure 5(b), yields variates which produce much more homogeneous sample projections, depicted by the considerably shorter average arrow length when compared with Figure 5(a). From this figure alone, it would seem that the shrinkage method is the more appropriate choice in this context. 
+
+``` {r, fig.show = "hold", out.width = "49%"}
+# plot the arrow plot of samples for CV rCCA data
+plotArrow(CV.rcc.nutrimouse, group = nutrimouse$diet, 
+          col.per.group = color.mixo(1:5),
+          title = '(a) Nutrimouse, CV method')
+
+# plot the arrow plot of samples for shrinkage rCCA data
+plotArrow(shrink.rcc.nutrimouse, group = nutrimouse$diet, 
+          col.per.group = color.mixo(1:5),
+          title = '(b) Nutrimouse, shrinkage method')
+```
+
+<p style="text-align: center;">FIGURE 5: Arrow sample plots from the rCCA performed on the nutrimouse data to represent the samples projected onto the first two canonical variates. Each arrow represents one sample.</p>
+
+### Variable Plots
+
+Another important step is analysing the correlation structure between features and the canonical variates. Figure 6(a) and (b) depict the correlation circle plots for the CV and shrinkage methods respectively. Each use a `cutoff` of 0.5 to prevent features with a negligible correlation being depicted. Figure 6 shows that the main correlations between genes and lipids appear on the first dimension, for example: `GSTPi2` with `C20.5n.3` and `C22.6n.3` in the top right corner; `THIOL` and `C.16.0` in the far right and `CAR1`, `ACOTH` and `C.20.1n.9` in the far left of both plots. Differences in interpretation appear in the second dimension where clustering differs much more. Determining which method is appropriate is based on the biological question. For instance, if it is equally important to separate all diets, then the shrinkage method may be more useful. 
+
+``` {r, fig.show = "hold", out.width = "49%"}
+plotVar(CV.rcc.nutrimouse, var.names = c(TRUE, TRUE),
+        cex = c(4, 4), cutoff = 0.5,
+        title = '(a) Nutrimouse, rCCA CV comp 1 - 2')
+
+plotVar(shrink.rcc.nutrimouse, var.names = c(TRUE, TRUE),
+        cex = c(4, 4), cutoff = 0.5,
+        title = '(b) Nutrimouse, rCCA shrinkage comp 1 - 2')
+```
+
+<p style="text-align: center;">FIGURE 6:  Correlation circle plots from the rCCA performed on the nutrimouse data showing the correlation between the gene expression and lipid concentration data.</p>
+
+A more robust way to evaluate the correlation structure is through a relevance network plot, as seen in Figure 7. The circular nodes represent genes and the rectangular nodes represent lipids. The bipartite relationships between these non-negligibly correlated features can be seen by the colour of the connecting lines (edges). Figure 7 shows that there is a reasonably complex correlation structure. However, there seems to be roughly three clusters, each corresponding to a group of three genes, a group of five genes and a single gene. The group of three genes has some negative correlations while the rest of the network seems to be positively correlated. 
+
+``` {r, eval = FALSE}
+network(CV.rcc.nutrimouse, comp = 1:2, interactive = FALSE,
+        lwd.edge = 2,
+        cutoff = 0.5)
+```
+
+<img src="http://mixomics.org/wp-content/uploads/2022/01/rCCA-Case-Study-Network-Plot.png" alt="newplot" style="max-width: 80%; display: block; margin: auto;"/>
+
+<p style="text-align: center;">FIGURE 7: Relevance network plot from the rCCA performed on the nutrimouse data. This shows the correlation structure for all bipartite relationships with a correlation above 0.5.</p>
+
+To complement the network plot, a CIM can be used (Figure 8). While Figure 8 does not have a cutoff which aids in determining the number of feature clusters, the correlations seen here do reflect that seen in Figure 7 - such that there are roughly three clusters. 
+
+``` {r, eval = FALSE}
+cim(CV.rcc.nutrimouse, comp = 1:2, xlab = "genes", ylab = "lipids")
+```
+
+<img src="http://mixomics.org/wp-content/uploads/2022/01/rCCA-Case-Study-CIM.png" alt="newplot" style="max-width: 80%; display: block; margin: auto;"/>
+
+<p style="text-align: center;">FIGURE 8: Cluster Image Map from the rCCA performed on the nutrimouse data. This shows the correlation structure for all bipartite relationships</p>
+
+### More information on Plots
+
+For a more in depth explanation of how to use and interpret the plots seen, refer to the following pages:
+
+- [`plotIndiv()` - Sample Plot](http://mixomics.org/graphics/sample-plots/plotindiv/)
+- [`plotArrow()` - Arrow Plot](http://mixomics.org/graphics/sample-plots/plotarrow/)
+- [`plotVar()` - Correlation Circle Plot](http://mixomics.org/graphics/variable-plots/plotvar/)
+- [`network()` - Relevance Network Graph](http://mixomics.org/graphics/variable-plots/network/)
+- [`cim()` - Cluster Image Maps](http://mixomics.org/graphics/variable-plots/cim/)
+
+## References
+
+1. [Martin, P., Guillou, H., Lasserre, F., Déjean, S., Lan, A., Pascussi, J.-M., San Cristobal, M., Legrand, P., Besse, P., and Pineau, T. (2007). Novel aspects of PPARalpha-mediated regulation of lipid and xenobiotic metabolism revealed through a multrigenomic study. Hepatology, 54, 767–777.](https://aasldpubs.onlinelibrary.wiley.com/doi/full/10.1002/hep.21510)

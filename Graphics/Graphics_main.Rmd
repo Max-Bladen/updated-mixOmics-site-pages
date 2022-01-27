@@ -1,0 +1,19 @@
+---
+#title: "Graphics_main"
+output: html_document
+---
+
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, echo= TRUE, warning=FALSE, message=FALSE, fig.align = 'center',
+                      fig.show=TRUE, fig.keep = 'all', out.width = '90%')
+```
+
+# Graphics
+
+The `mixOmics` is primarily focused on dimension reduction and data exploration. Hence, it has a range of methods which allow for the graphical representation of omics data. Both the relationship between samples and variables can, and should, be explored. All graphical functions in the package are based on S3 methods, such that all methods are generalisable and can take almost any different type of object (eg. `cca`, `spca` or `plsda`) as input. 
+
+The graphical methods are split into two categories;
+
+- [Sample Plots](http://mixomics.org/graphics/sample-plots/) allow for the visualisation of similarities between samples.
+- [Variable Plots](http://mixomics.org/graphics/variable-plots/) aid in  understanding  the importance of the variables in defining the components, and visualise their relationships.

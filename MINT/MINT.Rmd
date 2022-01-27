@@ -1,0 +1,104 @@
+---
+#title: "MINT"
+output: html_document
+
+---
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, echo= TRUE, warning=FALSE, message=FALSE, fig.align = 'center',
+                      fig.show=TRUE, fig.keep = 'all', out.width = '50%')
+```
+
+# Quick Start
+
+``` {r, eval = FALSE}
+library(mixOmics)
+data(stemcells)
+
+X <- stemcells$gene
+Y <- stemcells$celltype
+study <- stemcells$study
+```
+
+
+## MINT PLS-DA
+
+``` {r, eval = FALSE}
+stem.mint.plsda <- mint.plsda(X, Y, study = study) # 
+plotIndiv(stem.mint.plsda) # 
+plotVar(stem.mint.plsda) 
+```
+
+`?mint.plsda` can be run to determine all default arguments of this function:
+
+* Number of components (`ncomp = 2`): The first two PLS-DA components are calculated,
+* Scaling of the data (`scale = TRUE`): Each feature is standardised to zero means and unit variances.
+* Study membership of each observation (`study`): This does not have a default and needs to be explicitly specified. It is a list of integers indicating which study each sample is drawn from. 
+
+## MINT sPLS-DA
+
+``` {r, eval = FALSE}
+stem.mint.splsda <- mint.splsda(X, Y, study = study,
+                                keepX = c(10,5)) 
+plotIndiv(stem.mint.splsda) # 
+plotVar(stem.mint.splsda) # 
+
+selectVar(stem.mint.splsda, comp = 1)$name # 
+plotLoadings(stem.mint.splsda, method = 'mean', contrib = 'max')
+```
+
+`?mint.splsda` can be run to determine all default arguments of this function:
+
+* Same defaults as above for `mint.plsda`,
+* Features to retain (`keepX`): If unspecified, all features of the original dataframes will be used. Here, 10 and 5 features were arbitrarily selected.
+
+
+# MINT
+
+The **M**ultivariate **INT**egrative method, MINT, is a set of functions  which is focused on the horizontal integration (or *P*-integration) of datasets - such that these datasets are measured on the same *P* variables (eg. same set of genes). Within the `mixOmics` package, there are multi-group (aka. multiple study) variants of PCA, (s)PLS and (s)PLS-DA methods.
+
+## Suitable Contexts
+
+While the studies to be integrated will be homogeneous in the type of omics data used and the features that were measured, there will be systematic differences between each dataset. This is due to the difference in timing and geographical location of each study. Spurious results may be yielded from this analysis due to the variation between datasets outweighing the variation within each dataset. 
+
+MINT methods differ from their standard counterparts in that they control for batch effects prior to undergoing their normal procedures. Hence, the inter-dataset variation can be appropriately accounted for. This can not only increase effective sample size and statistical power, but also enables the sharing of data across research communities and the re-use of existing data deposited in public databases. 
+
+## Background
+
+Previously, sPLS-DA was extended to combine independent transcriptomics studies and to identify a gene signature defining human Mesenchymal Stromal Cells (MSC) [1]. This is a topical question in stem cell biology, as MSCs are a poorly defined group of stromal cells despite their increasingly recognized clinical importance. 
+
+In that first study  84 highly curated public gene expression data sets representing 125 MSC and 510 non-MSC samples spanning across 13 different microarray platforms were integrated.`YuGene` normalisation [2] was utilised, combined with an improved sPLS-DA. Extensive subsampling was used to avoid overfitting and to ensure a robust and reproducible gene signature. 
+
+The resulting agnostic platform signature of 16 genes gave an impressive classification accuracy of 97.8% on the training set, and 93.5% on an external test set (187 MSC and 474 non-MSC). The MSC molecular signature predictor is available in the `Stemformatics` web resource, an `R` package `bootsPLS` is also available on `CRAN.` The molecular signature has brought novel insights into the origin and function of MSC and it can be considered as a more accurate alternative to current immunophenotyping methods. 
+
+## Methods
+
+There are two overarching frameworks in the application of MINT in `mixOmics`:
+
+* **The supervised approach:** The aim is to classify novel samples and identify a set of discriminative markers leading to accurate class prediction on an external test set. In this context, there is a data matrix (**X**) which is used to explain the vector indicating class membership of each sample (**y**).
+
+* **The unsupervised approach:** Here, the aim is the integration of two data matrices (**X** and **Y**) in order to identify correlated variables (homologous to canonical PLS analysis) or variables from **X** which best explain **Y** (homologous to regression PLS analysis). 
+
+Both of these approaches have sparse and non-sparse variants. 
+
+<img src="http://mixomics.org/wp-content/uploads/2022/01/P-integration.jpg" alt="newplot" style="max-width: 80%; display: block; margin: auto;"/>
+
+<p style="text-align: center;">FIGURE 1: Visualisation of the two different frameworks within mixOmics. The subscripts (1, .. M or 1, .. L) denote the set of different studies being integrated. P, Q and n denote the number of predictive features, response features and samples respectively.</p>
+
+# Case Study
+
+For a more in depth breakdown of the functionality and usage of these functions, refer to [Case Study: MINT Stem Cells](http://mixomics.org/mixkernel/mint-stem-cells-case-study/).
+
+# Further Reading
+
+The `mixOmics` MINT methodology has been applied in real research contexts. A few examples can be seen below:
+
+- [Poirier S, Déjean, S, Midoux, C, Lê Cao K-A, Chapleur O (2020). Integrating independent microbial studies to build predictive models of anaerobic digestion inhibition by ammonia and phenol. Bioresource Technology 316:123952](https://www.researchgate.net/publication/343412985_Integrating_independent_microbial_studies_to_build_predictive_models_of_anaerobic_digestion_inhibition_by_ammonia_and_phenol)
+- [Tian L, Dong X, Freytag S, Lê Cao K-A, Su S, Abadi AJ, Amann-Zalcenstein D, Weber TS, Seidi S, Jabbari JS, Naik S, Ritchie ME (2019). Benchmarking single cell RNA-sequencing analysis pipelines using mixture control experiments. Nature methods. Jun;16(6):479-487](https://pubmed.ncbi.nlm.nih.gov/31133762/)
+
+# References
+
+1. [Rohart, F., Mason, E. A., Matigian, N., Mosbergen, R., Korn, O., Chen, T., Butcher, S., Patel, J., Atkinson, K., Khosrotehrani, K., Fisk, N. M., Lê Cao, K., and Wells, C. A. (2016). A molecular classification of human mesenchymal stromal cells. PeerJ, 4, e1845.](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4811172/)
+
+2. [Rohart, F., Eslami, A., Matigian, N. et al. MINT: a multivariate integrative method to identify reproducible molecular signatures across independent experiments and platforms. BMC Bioinformatics 18, 128 (2017). https://doi.org/10.1186/s12859-017-1553-8.](https://bmcbioinformatics.biomedcentral.com/articles/10.1186/s12859-017-1553-8#citeas)
+

@@ -1,0 +1,113 @@
+---
+#title: "Multiblock (s)PLS"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, 
+                      echo = TRUE, 
+                      warning = FALSE, 
+                      message = FALSE, 
+                      fig.show = TRUE, 
+                      fig.keep = 'all', 
+                      fig.align = "center",
+                      out.width = "70%") 
+```
+
+# Quick Start
+
+``` {r}
+library(mixOmics) # import the mixOmics library
+data(breast.TCGA) # extract the TCGA data
+
+X1 <- breast.TCGA$data.train$mirna # use the mirna and mrna expression levels as 
+X2 <- breast.TCGA$data.train$mrna  # the X datasets
+X <- list(mirna = X1, mrna = X2)
+
+Y <- breast.TCGA$data.train$protein # set the protein levels as the Y dataset
+```
+
+### Multiblock PLS
+``` {r, eval = FALSE}
+block.pls.result <- block.pls(X, Y, design = "full") # run the method
+
+plotIndiv(block.pls.result) # plot the samples
+plotVar(block.pls.result, legend = TRUE) # plot the variables
+```
+
+`?block.pls` can be run to determine all default arguments of this function:
+
+* Number of components (`ncomp = 2`): The first two PLS components are calculated,
+* Design matrix (`design = "full"`): The strength of all relationships between dataframes is maximised (= 1) - a "fully connected" design,
+* PLS mode (`mode = regression`): A PLS regression mode is performed,
+* Scaling of the data (`scale = TRUE`): Each block is standardised to zero means and unit variances.
+
+### Multiblock sPLS
+``` {r, eval = FALSE}
+# set the number of features to use for the X datasets
+list.keepX = list(mrna = rep(5, 2), mirna = rep(5,2)) 
+ # set the number of features to use for the Y dataset
+list.keepY = c(rep(10, 2))
+
+block.spls.result <- block.spls(X, Y, design = "full", # run the method
+                                keepX = list.keepX, keepY = list.keepY) 
+
+# plot the contributions of each feature to each dimension
+plotLoadings(block.pls.result, ncomp = 1) 
+plotIndiv(block.pls.result) # plot the samples
+plotVar(block.pls.result, legend = TRUE) # plot the variables
+```
+
+`?block.spls` can be run to determine all default arguments of this function:
+
+* Same defaults as above for `block.pls`,
+* Features to retain (`keepX`, `keepY`): If unspecified, these values will default to using all features of the original dataframes. 
+
+# Multiblock (s)PLS
+
+Note, "multiblock" will be abbreviated to "MB" within this page.
+
+Prior to learning the functionality of the MB-(s)PLS methods, a solid understanding of standard [(s)PLS](http://mixomics.org/methods/spls/) is strongly advised. The MB variants are extensions of the (s)PLS methods for when more than two datasets are being assessed. This draws on the methodology of Generalised CCA [1]. Here, there are multiple predictor datasests (**X~1~**, ... **X~Q~**) and a response vector/matrix of continuous values (**y** / **Y**). As with the standard forms of these methods, MB-sPLS is the sparse variant of MB-PLS and uses feature selection when forming latent components. When dealing with high dimensional datasets, MB-sPLS would be the recommended method as the non sparse version suffers from a lack of interpretability in this contexts. 
+
+MB-(s)PLS features the same four modes of operation as [(s)PLS](http://mixomics.org/methods/spls/), including "regression", "canonical", "invariant" and "classic". These each function the same way they do in (s)PLS. However, the `block.pls()` and `block.spls()` functions do not have the same tuning and performance assessment methods when compared to `pls()`, `spls()`, `block.plsda()` and `block.splsda()`.
+
+
+## Important Parameters
+
+### *design* 
+
+For a breakdown of how to construct the `design` matrix, refer to the [N-Integration Methods page](http://mixomics.org/methods/n-integration-methods/).
+
+### *indY* vs *Y*
+
+There are two ways in which the response dataset can be specified. If it is included in the list of datasets passed in via the `X` parameter, then `indY` passes the index of the desired Y dataframe to the function. In the below examples, the protein expression data is set to be the response dataframe:
+
+``` {r, eval = FALSE}
+X1 <- breast.TCGA$data.train$mirna 
+X2 <- breast.TCGA$data.train$mrna
+X3 <- breast.TCGA$data.train$protein
+X <- list(mirna = X1, mrna = X2, protein = X3)
+
+block.pls.result <- block.pls(X, indY = 3)
+```
+
+The alternative method is to have the desired Y dataframe totally separate to all the X datasets:
+
+``` {r, eval = FALSE}
+X1 <- breast.TCGA$data.train$mirna 
+X2 <- breast.TCGA$data.train$mrna
+X <- list(mirna = X1, mrna = X2)
+
+Y <- breast.TCGA$data.train$protein
+
+block.pls.result <- block.pls(X, Y = Y)
+```
+
+
+# References
+
+1. [Tenenhaus A and Tenenhaus M. Regularized generalized canonical correlation analysis. Psychometrika, 76(2):257–284, 2011.](https://link.springer.com/article/10.1007%2Fs11336-011-9206-8)
+
+

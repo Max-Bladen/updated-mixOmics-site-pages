@@ -1,0 +1,63 @@
+---
+#title: "The Team"
+output: html_document
+---
+
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, 
+                      echo= TRUE, 
+                      warning=FALSE, 
+                      message=FALSE, 
+                      fig.show=TRUE, 
+                      fig.keep = 'all', 
+                      fig.align = "center",
+                      out.width = "70%")
+```
+
+# The Team
+
+`mixOmics` can be considered as the collective effort of a group of people, including the `mixOmics` core team and several contributors. The project started with Prof. Philippe Besse, head of the Plateforme Biostatistique at the Institut de Mathématiques de Toulouse, Université Paul Sabatier, Toulouse, France. Since late 2008 a part of the project migrated to the southern hemisphere to Australia.
+
+The team is now collaborating between Toulous, Melbourne, and Canada.
+
+## The Core Team
+
+- A/Prof. Kim-Anh Lê Cao ([University of Melbourne](https://lecao-lab.science.unimelb.edu.au/), Australia)
+  - [Translational Research Institute Australia](https://tri-idp.tri.edu.au/idp/profile/SAML2/Redirect/SSO?execution=e1s2)
+- A/Prof. Sébastien Déjean ([Université Toulouse III Paul Sabatier](https://www.univ-tlse3.fr/), [Institut de Mathématiques](https://www.math.univ-toulouse.fr/?lang=fr), France)
+  - [Personal Site](https://perso.math.univ-toulouse.fr/dejean/)
+- Al Abadi ([University of Melbourne](https://lecao-lab.science.unimelb.edu.au/), Australia)
+
+## The Key Contributors
+
+- Benoît Gautier ([University of Queensland Diamantina Institute](https://di.uq.edu.au/), Australia)
+  - [Translational Research Institute Australia](https://www.tri.edu.au/)
+- Florian Rohart ([University of Queensland](https://www.uq.edu.au/), Australia)
+  - [Personal Site](http://florian.rohart.free.fr/Professional_page/Home.html)
+- Amrit Singh ([University of British Columbia](https://www.ubc.ca/), Canada)
+- Dr Zoe Welham ([University of Sydney](https://www.sydney.edu.au/), Australia)
+- François Bartolo ([Soladis Group](https://www.soladis.com/), France)
+- Xin-Yi Chua ([QFAB](https://qfab.org/team/xinyi-chua), Australia)
+
+### Trainers
+
+- Yannick Lippi
+- Jérôme Mariette
+- Eva Yiwen Wang
+- Olivier Chapleur
+- Dr David Rengal
+- Laëtitia Cardona
+
+
+### Past Contributors and Collaborators
+
+- Dr Ignacio González ([INRA](https://www.inrae.fr/), [GenoToul](http://bioinfo.genotoul.fr/), [Plateformes Biostatistique et Bioinformatique](https://ums-plbs.univ-lille.fr/les-plateformes-constitutives/bioinformatique-biostatistique))
+- Philippe Besse ([UPS](https://www.univ-tlse3.fr/), [Institut de Mathématiques](https://www.math.univ-toulouse.fr/?lang=en)) 2005-2008
+- Christele Robert-Granié ([INRA](https://www.inrae.fr/), GenPhySE) 2005-2008
+- Alain Baccini ([UPS](https://www.univ-tlse3.fr/), [Institut de Mathématiques](https://www.math.univ-toulouse.fr/?lang=en)) 2005-2008
+- Pascal Martin ([INRA](https://www.inrae.fr/), ToxAlim) 2005-2008
+- Benoit Liquet ([Université de Bordeaux](https://www.u-bordeaux.fr/)) 2011-2012
+
+
+

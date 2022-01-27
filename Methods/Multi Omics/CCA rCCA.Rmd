@@ -1,0 +1,109 @@
+---
+#title: "rCCA"
+#author: "KA Le Cao, Sebastien Dejean, Xin-Yi Chua, Danielle Davenport"
+date: "`r Sys.Date()`"
+output: html_document
+---
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, 
+                      echo= TRUE, 
+                      warning=FALSE, 
+                      message=FALSE, 
+                      fig.show=TRUE, 
+                      fig.keep = 'all', 
+                      fig.align = "center",
+                      out.width = "70%") 
+```
+
+# Quick Start
+
+```{r}
+library(mixOmics) # call mixOmics library
+data(nutrimouse) # read in nutrimouse dataset
+```
+
+## CCA
+
+``` {r, eval = FALSE}
+X <- nutrimouse$lipid[, 1:10] # extract first ten lipid concentration variables
+Y <- nutrimouse$gene[, 1:10] # extract first ten gene expression variables
+
+result.cca.nutrimouse <- rcc(Y, X) # run the CCA method
+
+# plot projection into canonical variate subspace
+plotIndiv(result.cca.nutrimouse) 
+# plot original variables' correlation with canonical variates
+plotVar(result.cca.nutrimouse) 
+```
+
+Note that the `X` and `Y` datasets have been sliced such that each contains only ten variables. CCA does not perform well when the sum of the number of variables from each dataset is greater than the number of samples (ie. *P + Q > N*, where *P* is the number of variables in the first dataset, *Q* is the number of variables in the second dataset and *N* is the number of samples in each dataset). Use the rCCA Quick Start if your data does not suit the condition *P + Q < N*.
+
+`?rcc` can be run to determine all default arguments of this function. The default parameters of interest are as follows (when undergoing classical CCA):
+
+* Number of components (`ncomp = 2`): Only the first two pairs of canonical variates are calculated .
+* For classical CCA, do not pass in a parameter for `method`.
+
+## rCCA
+
+
+
+``` {r, eval = FALSE}
+X <- nutrimouse$lipid # extract all lipid concentration variables
+Y <- nutrimouse$gene # extract all gene expression variables
+
+# Only one of these calls of rcc is required, 
+# pick depending on regularisation method
+
+# using the ridge method
+result.cca.nutrimouse <- rcc(Y, X, method = "ridge", 
+                             lambda1 = 0.5, lambda2 = 0.05) 
+# using the shrinkage method
+result.rcca.nutrimouse <- rcc(Y, X, method = 'shrinkage')  
+
+# plot projection into canonical variate subspace
+plotIndiv(result.cca.nutrimouse) 
+# plot original variables' correlation with canonical variates
+plotVar(result.cca.nutrimouse) 
+```
+
+As rCCA is not bound by the same requirement (*P + Q > N*), all features are used to construct **X** and **Y**. Of the two datasets, the set with the smaller number of variables should be passed as a parameter first. In this example, `Y` has less variables than `X` and is used as the first parameter.
+
+The default parameters for the `rcc()` function are as follows (when undergoing regularised CCA):
+
+* Number of components (`ncomp = 2`): Only the first two pairs of canonical variates are calculated .
+* Regularisation Method (`method =  c("ridge", "shrinkage")`): If regularisation is to be done, one of these methods must be passed in.
+* Regularisation parameter (`lambda1, lambda2 = 0`): Controls the degree of regularisation. These parameters are only required if `method = 'ridge'`. These can be tuned using `tune.rcc`.
+
+
+# Canonical Correlation Analysis
+
+Canonical Correlation Analysis (CCA) is a multivariate approach to highlight correlations between two data sets acquired on the same experimental units. It is a dimension reduction technique that aids in exploring datasets. The components  yielded by CCA (referred to as canonical variates) are linear combinations of variables from each original dataset. Canonical variates are constructed via the maximisation of the correlation between pairs of canonical variates. Each pair of canonical variates has an associated canonical correlation - the correlation between the two novel components.
+
+This classical CCA method is only applicable when *P + Q < N*, where *P* is the number of variables in the first dataset, *Q* is the number of variables in the second dataset and *N* is the number of samples in each dataset.
+
+
+# Regularised Canonical Correlation Analysis
+
+The issue of high dimensionality can be by-passed by introducing regularisation into the CCA method. Regularised Canonical Correlation Analysis (rCCA) is able to perform on datasets of high dimensions and/or those with high collinearities (both of which are common in biological contexts). Ridge penalities ($\lambda1$, $\lambda2$) are added to the diagonal of `X` and `Y` respectively to make them invertible. This method was proposed by Vinod (1976) [1], then developed by Leurgans et al. (1993) [2].
+
+## Regularisation Methods
+
+There are two methods included in the `mixOmics` package to allow the CCA method to be regularised, such that the $\lambda1$ and $\lambda2$ are optimised. These include:
+
+* **Cross Validation Approach**: In the `tune.rcc()` function, a coarse grid of possible values for $\lambda1$ and $\lambda2$ is input to assess every possible pair of parameters. As this process is computationally
+intensive, it may not run for very large data sets ($P$ or $Q > 5,000$). The tuning function outputs the optimal regularisation parameters, which are then input into the `rcc()` function with the argument `method = 'ridge'`. 
+
+* **Shrinkage Approach**: This approach proposes an analytical calculation of the regularisation parameters for large-scale correlation matrices, and is implemented directly in the `rcc()` function using the argument `method = 'shrinkage'`. The downside of this approach is that the ($\lambda1$, $\lambda2$) values are calculated independently, regardless of the cross-correlation between **X** and **Y** , and thus may not be successful in optimising the correlation between the data sets.
+
+
+# Case study
+
+See [Case Study: rCCA Nutrimouse](http://mixomics.org/rcca-nutrimouse/) for further details and plotting options.
+
+
+# References
+
+1. [Vinod, H.D., 1976. Canonical ridge and econometrics of joint production. Journal of econometrics, 4(2), pp.147-166.](https://www.sciencedirect.com/science/article/abs/pii/0304407676900105)
+
+2. [Leurgans, S.E., Moyeed, R.A. and Silverman, B.W., 1993. Canonical correlation analysis when the data are curves. Journal of the Royal Statistical Society. Series B (Methodological), pp.725-740.](http://www.jstor.org/stable/2345883)

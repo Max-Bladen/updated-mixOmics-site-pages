@@ -1,0 +1,47 @@
+---
+#title: "biplot"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, echo= TRUE, warning=FALSE, message=FALSE, #dev = 'jpeg',
+                      fig.show=TRUE, fig.keep = 'all', fig.height= 6, fig.width=7)
+```
+
+# **biplot()** - Biplot
+
+`biplot()` combines the functionality of `plotIndiv()` and `plotVar()`, such that both the variable correlation vectors and the samples are plotted on the same set of axes. Currently within the `mixOmics` package, this function is only able to be used on the output from PCA and (s)PLS methods. It does not contain the circles seen in `plotVar()`, but contains the same information along with the samples themselves. As with `plotVar()`, the function assumes that the data is centered and scaled, so ensure this is done prior to the use of `biplot()`.
+
+This plot can indicate what variables are responsible for explaining trends in the sample values. A variable vector that points towards a set of certain points can provide information on what caused the clustering of those points. For example, in Figure 1, variables that are positively associated with the first component point towards the points labeled as within the 'coc' diet, suggesting that these lipids are characteristic of this particular diet group. 
+
+``` {r, fig.show = "hold", out.width = "49%"}
+library(mixOmics)
+data(nutrimouse)
+
+# undergo the pca method
+scale.pca.lipid <- pca(nutrimouse$lipid, ncomp = 3, scale = TRUE, center = TRUE) 
+
+biplot(scale.pca.lipid) # produce the biplot
+# plot the samples and colour according to their diet
+plotIndiv(scale.pca.lipid, group = nutrimouse$diet,
+  pch = nutrimouse$genotype,
+  legend = TRUE, legend.title = 'Diet',
+  legend.title.pch = 'Genotype',
+  title = 'PCA on nutrimouse lipid data')
+```
+
+<p style="text-align: center;">FIGURE 1: Biplot from the PCA applied to the nutrimouse lipid data as well as a standard sample plot to show the class of each sample.</p>
+
+# Case Studies
+
+Refer to the following case studies for a more in depth look at generating and interpreting the output of the `biplot()` function:
+
+- [PCA - Multidrug](http://mixomics.org/case-studies/spca-multidrug-case-study/)
+
+
+
+
+
+

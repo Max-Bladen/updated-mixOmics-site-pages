@@ -1,0 +1,74 @@
+---
+#title: "circos"
+date: "`r Sys.Date()`"
+output: html_document
+---
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, echo= TRUE, warning=FALSE, message=FALSE, #dev = 'jpeg',
+                      fig.show=TRUE, fig.keep = 'all', fig.height= 6, fig.width=7)
+```
+
+# **circosPlot()** - Circos Plots
+
+When using a N-integrative framework, a circos plot can be used to quickly gain an idea of how the various inputted datasets relate to on another. This function is an extension of the concepts used to generate CIMs and relevance networks. The number and direction of associations (above a certain absolute value) between the datasets can quickly be judged, providing information as to which datasets are possibly linked by an explanatory relationship. 
+
+The only methods which this is applicable for in the `mixOmics` package are `block.pls`, `block.spls`, `block.plsda()` and `block.splsda`. 
+
+## **circosPlot()** Parameters
+
+#### **cutoff**
+As with the other visualisation methods which use this parameter, any pair of features with a correlation lower than the set value will not be shown. In `circosPlot()`, a relatively high value is recommended otherwise there are so many lines interpretation is near impossible. This does not have a default value and needs to be set manually. 
+
+#### **line** 
+This parameter controls whether the plots of expression (outside the circle) are shown. Each represents the average expression for that gene, protein or otherwise within that sample group. This is set as `line = FALSE` by default, such that they are not shown. 
+
+## **circosPlot()** in N-Integration Framework
+
+Figure 1 depicts the circos plot run on the `breast.TCGA` data (using the DIABLO (multiblock sPLS-DA) method). The three different datasets are segmented and coloured across the circle with each subsection representing a specific feature. The lines within the circle represent associations between linked variables. These lines are coloured according to whether they have a positive or negative correlation. The lines outside the circle (toggled using the above described `line` parameter) depict the overall expression of the selected variables. These outer lines are coloured by the response variable value they correspond to.
+
+A basic interpretation of this plot would be:
+
+* The indicated miRNA features are negatively correlated with the features from the proteomics and mRNA datasets
+* The indicated features from the proteomics and mRNA datasets are positively correlated with one another. 
+
+These interpretations could then be verified through more rigorous techniques. Refer to the below link below for the Case Study which expands on the meaning of this plot. 
+
+
+
+``` {r, fig.align = "center"}
+library(mixOmics)
+data('breast.TCGA')
+
+# extract three datasets 
+data = list(mRNA = breast.TCGA$data.train$mrna, 
+            miRNA = breast.TCGA$data.train$mirna, 
+            proteomics = breast.TCGA$data.train$protein)
+# extract the categorical response variable
+Y = breast.TCGA$data.train$subtype
+
+# set the design
+design = matrix(0.1, ncol = length(data), nrow = length(data), 
+                dimnames = list(names(data), names(data)))
+
+# set which variables from the datasets will be used to construct the components
+list.keepX = list(mRNA = c(6,14), miRNA = c(5,18), proteomics = c(6,7))
+
+# undergo the DIABLO method
+sgccda.res = block.splsda(X = data, Y = Y, ncomp = 2, 
+                          keepX = list.keepX, design = design)
+
+# plot the output on a circos plot
+circosPlot(sgccda.res, cutoff = 0.7, line = TRUE, 
+           color.blocks= c('darkorchid', 'brown1', 'lightgreen'),
+           color.cor = c("chocolate3","grey20"), size.labels = 1.5)
+```
+
+<p style="text-align: center;">FIGURE 1: Circos plot from multiblock sPLS-DA performed on the breast.TCGA study. The plot represents the correlations greater than 0.7 between variables of different types, represented on the side quadrants</p>
+
+# Case Studies
+
+Refer to the following case studies for a more in depth look at generating and interpreting the output of the `circos()` function:
+
+- [N-Integration - TCGA](http://mixomics.org/mixdiablo/diablo-tcga-case-study/)
+

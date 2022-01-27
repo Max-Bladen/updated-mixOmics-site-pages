@@ -1,0 +1,169 @@
+---
+#title: "PCA Multidrug Case Study"
+date: "`r Sys.Date()`"
+output: html_document
+---
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, echo= TRUE, warning=FALSE, message=FALSE, 
+                      fig.show=TRUE, fig.keep = 'all', out.width = '90%')
+```
+
+# Case Study of sPCA with Multidrug dataset
+
+Principal Component Analysis (PCA) is primarily used to explore one single type of ‘omics data (e.g. transcriptomics, proteomics, metabolomics, etc) and identify the largest sources of variation. We often use PCA as a preliminary step to better understand the data. In high dimensionality contexts, sPCA is desirable over PCA. 
+
+For background information on the (s)PCA method, refer to the [PCA Methods Page](http://mixomics.org/methods/spca/).
+
+# Rscript
+
+The R script used for all the analysis in this case study is available [here](http://mixomics.org/wp-content/uploads/2022/01/sPCA-Multidrug-Case-Study.zip).
+
+## To begin
+
+Load the latest version of mixOmics:
+
+``` {r}
+library(mixOmics)
+```
+
+### The data
+
+The multidrug dataset is used by the National Cancer Institute to screen for anticancer activity. The data come from a pharmacogenomic study (Szakács et al., 2004).
+
+The `mixOmics` multidrug data set is accessed via `multidrug`, and contains the following:
+
+- `multidrug$ABC.trans` (continuous matrix): 60 rows and 48 columns. The expression of the 48 human ABC transporters for the 60 cell lines.
+- `multidrug$compound` (continuous matrix): 60 rows and 1429 columns. The activity of 1429 drugs for the 60 cell lines.
+- `multidrug$comp.name` (character vector): The names or the NSC No. of the 1429 compounds.
+- `multidrug$cell.line` (list of two character vectors): First vector (`Sample`) are the sample names of the 60 cell line which were analysed. Second vector (`Class`) is the phenotypes of the 60 cell lines. The NCI-60 panel includes cell lines derived from cancers of colorectal (7 cell lines), renal (8), ovarian (6), breast (8), prostate (2), lung (9) and central nervous system origin (6), as well as leukemias (6) and melanomas (8).
+
+First, the ABC transported data is examined by calling `multidrug$ABC.trans`. The dimensions of this dataset are confirmed:
+
+``` {r}
+data(multidrug) # call multidrug dataset
+X <- multidrug$ABC.trans # extract ABC transporter data
+dim(X) # confirm the dimension of data
+```
+
+## Initial analysis
+
+To begin analysis, the data can be explored using unoptimised parameters. This will provide preliminary information about the structure of the dataset and aid in tuning sPCA. First we construct a simple model using an arbitrary number of components and all variables. Then, it is plotted to assess the explained variance:
+
+``` {r, fig.align= "center"}
+# run preliminary model
+trans.spca <- spca(X, ncomp = 10, center = TRUE, scale = TRUE) 
+plot(trans.spca) # plot the explained variance per component
+```
+
+<p style="text-align: center;">FIGURE 1: Explained variance of Principal Components on the Multidrug ABC Transporter data</p>
+
+Note that Figure 1 can also be achieved using the `tune.pca()` function, as described further below. The corresponding code would be:
+
+``` {r, eval = FALSE}
+# extract the percentages of explained variance
+explainedVariance <- tune.pca(X, ncomp = 10, center = TRUE, scale = FALSE) 
+plot(explainedVariance) # plot these values
+```
+
+## Tuning sPCA
+
+### Transforming the data
+#### The **scale** and **centre** Parameters
+
+Differing ranges and scales of variables introduces bias into the output of the PCA function. Therefore, data can be centered and/or scaled when feature variance is not homogeneous. The relevant parameters default to `center = TRUE` and `scale = FALSE`. These can be manually adjusted by the user in cases where this is not desired. If the variance across the variables being used are similar, then only centering would be required. However, if the variance of each variable is vastly different (which can be induced by differing scales), scaling will be required.
+
+### Selecting the number of components
+#### The **ncomp** Parameter
+
+PCA is meant to reduce the complexity of a dataset and summarise it in the minimal number of dimensions possible. The number of PCs to be retained is a crucial decision in PCA. This choice can be informed by the proportion of variance that is captured by each of the PCs. Figure 1 assists in deciding the number of PCs to retain. 
+
+A common method for selection is finding the 'elbow' in the barplot. Beyond the 'elbow', the decrease in explained variance will stabilise for remaining PCs. PCs beyond this point usually provide negligible returns in terms of the information they explain.
+
+Given Figure 1, two or three PCs would likely be the most suitable selection. The value selected from `tune.pca` can be inputted into the `ncomp` parameter within the `pca` function. 
+
+### Selecting the number of variables
+#### The **keepX** Parameter
+
+When using sPCA, the parameter `keepX` controls the number of variables to use for the construction of each PC. Selecting a value for this parameter using explained variance becomes difficult as when less original variables are used. The total explained variance becomes deflated. Hence, the selected value for `keepX` is case dependent and should be optimised by the user. Cross-validation will improve the accuracy of this selection. Within the package, there is a `tune.spca` function which has a very similar role to `tune.pca`, but has the added functionality of aiding in optimising the number of selected variables. 
+
+``` {r, fig.align= "center"}
+set.seed(8589) # for reproducibility with this case study, remove otherwise
+test.keepX <- c(seq(5, 25, 5)) # set the number of variable values to be tested
+
+tune.spca.res <- tune.spca(X, ncomp = 3, # generate the first 3 components
+                           nrepeat = 5, # repeat the cross-validation 5 times
+                           folds = 3, # use 3 folds for the cross-validation
+                           test.keepX = test.keepX)
+plot(tune.spca.res) # plot the optimisation output
+```
+
+<p style="text-align: center;">FIGURE 2: Tuning the number of variables to select with sPCA on the ABC Transporter data.</p>
+
+The optimisation output can be observed in Figure 2. For each component (coloured according to the legend), the optimal number of features to select is shown by the large diamonds. This is selected per component using a one-sided t-test. The y-axis depicts the average correlation between the predicted and actual components. This is cross-validated over `folds` folds and repeated `nrepeat` times. 
+
+The optimal number of features can be extracted from this object by the below call:
+
+``` {r}
+tune.spca.res$choice.keepX # how many variables per component is optimal
+```
+
+## Final Model
+
+Using these tuned parameters, the final model can now be run to yield an optimised sPCA visualisation. 
+
+``` {r}
+final.spca <- spca(X, ncomp = 3, # based off figure 1, three components is best
+                   keepX = tune.spca.res$choice.keepX)
+```
+
+## Plots
+
+### Sample Plots
+
+``` {r, fig.align = "center"}
+# plot final sPCA samples for first two components
+plotIndiv(final.spca, comp = c(1, 2), ind.names = TRUE, 
+          group = multidrug$cell.line$Class,  # use class to colour each sample
+          legend = TRUE, title = 'Multidrug transporter, sPCA comp 1 - 2')
+```
+
+<p style="text-align: center;">FIGURE 3: Sample plot from the sPCA performed on the ABC Transporter data. Samples are coloured by cell line type and numbers indicate the sample IDs</p>
+
+The projection of each sample onto the first two Principal Components can be seen in Figure 3. These are coloured according to their cancer type, such that clustering can be observed. The second component seems to separate most of the Melanoma cell lines from the other cancer types interestingly. 
+
+### Variable Plots
+
+``` {r, fig.align = "center"}
+# plot variables against the sPCA components
+plotVar(final.spca, comp = c(1, 2), var.names = TRUE,  
+        title = 'Multidrug transporter, sPCA comp 1 - 2')
+```
+
+<p style="text-align: center;">FIGURE 4: Correlation circle plot from the sPCA performed on the ABC Transporter data. Only the transporters selected by the sPCA are shown on this plot.</p>
+
+Here, Figure 4 shows a correlation circle plot which highlights clusters of ABC transporters and shows their contribution to each principal component. For instance, features `ABCD2` and `ABCC12` are positively correlated with one another as well as contributed to a decent degree to the primary component. 
+
+``` {r, fig.align = "center"}
+# plot samples and variables against the sPCA components
+biplot(final.spca, cex = 0.7, 
+       xlabs = paste(multidrug$cell.line$Class, 1:nrow(X)), #simplify names
+       group = multidrug$cell.line$Class,  # colour by sample class
+       title = 'Multidrug transporter, sPCA comp 1 - 2')
+```
+
+<p style="text-align: center;">FIGURE 5: Biplot from the sPCA performed on the ABS.trans data after variable selection. The plot highlights which transporter expression levels may be related to specific cell lines, such as melanoma.</p>
+
+The biplot seen in Figure 5 depicts how each feature may explain the positioning of each sample via the use of a biplot. For this, it can be seen that features `ABCD1`, `ABCC2`, `ABCA9` and `ABCB5` may be responsible for the clustering of the Melanoma samples. 
+
+### More information on Plots
+
+For a more in depth explanation of how to use and interpret the plots seen, refer to the following pages:
+
+- [`plotIndiv()` - Sample Plot](http://mixomics.org/graphics/sample-plots/plotindiv/)
+- [`plotVar()` - Correlation Circle Plot](http://mixomics.org/graphics/variable-plots/plotvar/)
+- [`biplot()` - Biplot](http://mixomics.org/graphics/variable-plots/biplot/)
+
+## References
+
+1. [Szakács G., Annereau J.-P., Lababidi S., Shankavaram U., Arciello A., Bussey K.J., Reinhold W., Guo Y., Kruh G.D., Reimers M., Weinstein J.N. and Gottesman M.M. (2004) Predicting drug sensitivity and resistance: Profiling ABC transporter genes in cancer cells. Cancer Cell 4, pp 147-166.](https://pubmed.ncbi.nlm.nih.gov/15324696/)

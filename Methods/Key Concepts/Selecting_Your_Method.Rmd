@@ -1,0 +1,122 @@
+---
+#title: "Selecting your Method"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, 
+                      echo= TRUE, 
+                      warning=FALSE, 
+                      message=FALSE, 
+                      fig.show=TRUE, 
+                      fig.keep = 'all',
+                      out.width = "70%") 
+```
+
+# Selecting your method
+
+There is sometimes difficulty in choosing with method is appropriate to use for your specific analysis. This page seeks to clarify what sort of biological questions you will be able to solve with each of the methods included in the `mixOmics` package. Figures 1&2 give a basic outline of which methods are applicable given your data.
+
+<img src="http://mixomics.org/wp-content/uploads/2021/12/Key-Concepts-Selecting_Your_Method.png" alt="newplot" style="max-width: 70%; display: block; margin: auto;"/>
+<p style="text-align: center">FIGURE 1: An overview of what quantity and type of dataset each method within mixOmics requires. Thin columns represent a single variable, while the larger blocks represent datasets of multiple samples and variables.</p>
+
+<img src="http://mixomics.org/wp-content/uploads/2021/12/Key-Concepts-Method-Decision-Tree.png" alt="newplot" style="max-width: 70%; display: block; margin: auto;"/>
+<p style="text-align: center">FIGURE 2: A decision tree to aid in selecting the correct method for a given analysis. The first step involves determining how many dataframes are being used and how they are related. Next is the question of whether it is a classification or a regression problem. If neither, then the method is purely exploratory.</p>
+
+
+
+## A PCA type of question 
+#### (one data set, unsupervised)
+
+- What are the major trends or patterns in my data? 
+- Do the samples cluster according to the biological conditions of interest?
+- Which variables contribute the most to explaining the variance in the data?
+
+Variants such as **sparse PCA** (**sPCA**) allow for the identification of key variables that contribute to defining the *principal components* while Independent Principal Component Analysis (**IPCA**) uses **ICA** as a denoising process prior to *principal component* generation to maximise statistical independence between these components.
+
+#### Links:
+[(s)PCA Methods Page](http://mixomics.org/methods/spca/)
+
+[(s)PCA Multidrug Case Study](http://mixomics.org/case-studies/spca-multidrug-case-study/)
+
+
+
+## A PLS type of question 
+#### (two datasets, unsupervised or supervised) 
+
+- Does the information from both datasets agree and reflect any biological condition of interest? 
+- If I consider **Y** as response data, can I model **Y** given the predictor variables **X**? 
+- What are the subsets of variables that are highly correlated and explain the major sources of variation across the data sets?
+
+**PLS** maximises the covariance between data sets via *latent components*, which reduce the dimensions of the data. In **sparse PLS** (**sPLS**), lasso penalisation is applied on the *loading vectors* to identify the key variables that covary. There are two modes:
+
+- **sPLS Regression**: One dataset can be explained by another.
+- **sPLS Canonical**: Similar to CCA where both data sets are considered symmetrically. The difference is that PLS maximises the covariance between the datasets whereas CCA maximises the correlation.
+
+#### Links:
+[(s)PLS Methods Page](http://mixomics.org/methods/spls/)
+
+[(s)PLS Liver Toxicity Case Study](http://mixomics.org/case-studies/spls-liver-toxicity-case-study/)
+
+
+
+## A CCA type of question 
+#### (two datasets, unsupervised)
+ 
+- Does the information from both data sets agree and reflect any biological condition of interest?
+- What is the overall correlation between them?
+
+**CCA** (and its variant **regularised CCA** (**rCCA**)) achieves dimension reduction in each dataset whilst maximising similar information between the two datasets measured on the same samples. The *canonical correlations* inform us of the agreement between the two data sets that are projected into a smaller space spanned by the *canonical variates*.
+
+#### Links:
+[( r)CCA Methods Page](http://mixomics.org/methods/rcca/)
+
+[( r)CCA Nutrimouse Case Study](http://mixomics.org/case-studies/rcca-nutrimouse-case-study/)
+
+
+## A PLS-DA type of question 
+#### (one dataset, classification)
+
+- Can I discriminate samples based on their outcome category? 
+- Which variables discriminate the different outcomes? 
+- Can they constitute a molecular signature that predicts the class of external samples?
+
+**PLS-DA** is the special case of **PLS** where the **Y** dataframe is a single, categorical variable (**y**). **PLS-DA** is used for classification by fitting a predictive model which discriminates sample groups. The variant sparse **PLS-DA** (**sPLS-DA**) includes lasso penalisation on the *loading vectors* to identify a subset of key variables.
+
+#### Links:
+[(s)PLS-DA Methods Page](http://mixomics.org/methods/spls-da/)
+
+[(s)PLS-DA SRBCT Case Study](http://mixomics.org/case-studies/splsda-srbct-case-study/)
+
+## An N−integration type of question 
+#### (several data sets, supervised or unsupervised)
+
+- Does the information from all data sets agree and reflect any biological condition of interest?
+- Can I discriminate samples across several data sets based on their outcome category? 
+- Which variables across the different omics data sets discriminate the different outcomes?
+- Can they constitute a multi-omics signature that predicts the class of external samples?
+
+The N-integration framework integrates several datasets measured on the same samples. There exists the **multiblock sPLS** method for undergoing a PLS analysis on more than two datasets. If a supervised framework is desired, there is **multiblock sPLS-DA** (referred to as **DIABLO**) for generating a predictive model for a categorical variable based on predictors from several datasets. There also exists non-sparse variants of these methods within the `mixOmics` package. 
+
+#### Links:
+[DIABLO Methods Page](http://mixomics.org/mixdiablo/)
+
+[DIABLO TCGA Case Study](http://mixomics.org/mixdiablo/diablo-tcga-case-study/)
+
+## A P−integration type of question 
+#### (several studies of the same omic type, supervised or unsupervised)
+
+- Can I combine the data sets while accounting for the variation between studies? 
+- Can I discriminate the samples based on their outcome category? 
+- Which variables are discriminative across all studies? 
+- Can they constitute a signature that predicts the class of external samples?
+
+The P-integration framework (refered to as **MINT** - **M**ultivariate **INT**egration) integrates several datasets measured on the same types of variables. For example, if it is genomic data then each dataframe would have the same set of genetic markers represented as variables. The supervised framework (**multigroup sPLS-DA**) aims to classify samples and generate a set of variables which leads to the best prediction on an external test set. The unsupervised framework (**multigroup sPLS**) identifies highly correlated *latent components* from the multiple datasets. It can also be used in a regression analysis, similar to the **sPLS** regression mode.
+
+#### Links:
+[MINT Methods Page](http://mixomics.org/mixmint/)
+
+[MINT Stem Cells Case Study](http://mixomics.org/mixmint/mint-stem-cells-case-study/)
+

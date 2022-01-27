@@ -1,0 +1,82 @@
+---
+#title: "main_page"
+date: "`r Sys.Date()`"
+output: html_document
+---
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, echo= TRUE, warning=FALSE, message=FALSE, #dev = 'jpeg',
+                      fig.show=TRUE, fig.keep = 'all', fig.height= 6, fig.width=7)
+```
+
+# Methods
+
+The `mixOmics` package provides several methodologies that can answer a variety of biological questions. Below are listed some typical analysis frameworks.
+
+When referring to the expression or abundance of entities that are measured, the term **variable** will be used. **Samples, instances or observations** will be used when referring to the unit (individual, patient or cell) on which the experiment was performed. 
+
+In `mixOmics`, the data should be formatted with samples in rows and variables in columns.
+
+<img src="http://mixomics.org/wp-content/uploads/2022/01/mixOmics_methods.png" alt="newplot" style="max-width: 80%; display: block; margin: auto;"/>
+
+
+## The mixOmics Philosophy
+
+The multivariate statistical methods implemented in `mixOmics` aim at summarising the main characteristics of the data while capturing the largest sources of variation in the data. Multivariate methods are mostly considered to be 'exploratory' methods as they do not enable statistical inference. However, the biological question matters in order to apply the most suitable multivariate method. Go to [Selecting the Method](http://mixomics.org/methods/selecting-your-method/) for assistance in choosing with methodology provided by `mixOmics` is suitable for your problem.
+
+## Methods in MixOmics
+
+In `mixOmics` we propose a whole range of multivariate methods that were developed and validated on many biological studies. Selecting which of these methods to use depends on the type and quantity of data being analysed. 
+
+### Exploring a single data set
+
+If one is looking to get a better understanding of the structure of a single omics dataset (eg. transcriptomics data), these methods are applicable: 
+
+- Principal Component Analysis ([PCA](http://mixomics.org/methods/spca/))
+
+- sparse Principal Component Analysis ([sPCA](http://mixomics.org/methods/spca/))
+
+- Independent Principal Component Analysis ([IPCA](http://mixomics.org/methods/sipca/))
+
+- sparse Independent Principal Component Analysis ([sIPCA](http://mixomics.org/methods/sipca/))
+
+### Classification
+
+If one is looking to classify different groups of novel samples according to a discrete outcome, these methods will generate appropriate models:
+
+- PLS-Discriminant Analysis ([PLS-DA](http://mixomics.org/methods/spls/))
+
+- sparse PLS-DA ([sPLS-DA](http://mixomics.org/methods/spls/))
+
+### Integration of two datasets
+
+If one is looking to observe how multiple datasets (e.g. transcriptomics and proteomics data) relate to one another, as well as how they can be used to predict one another, the following methods will be useful:
+
+- Canonical Correlation Analysis ([CCA](http://mixomics.org/methods/rcca/))
+
+- regularized Canonical Correlation Analysis ([rCCA](http://mixomics.org/methods/rcca/))
+
+- Partial Least Squares ([PLS](http://mixomics.org/methods/spls/))
+
+- sparse Partial Least Squares ([sPLS](http://mixomics.org/methods/spls/))
+
+### N-Integration
+
+If one is looking to integrate more than two datasets measured across the same $N$ samples, `mixOmics` contains both supervised and unsupervised methods.
+
+- Multiblock PLS ([Multiblock PLS](http://mixomics.org/methods/multiblock-spls/))
+
+- Multiblock sPLS ([Multiblock sPLS](http://mixomics.org/methods/multiblock-spls/))
+
+- Multiblock (s)PLS-DA - DIABLO ([DIABLO](http://mixomics.org/mixdiablo/))
+
+
+## Properties of mixOmics
+
+### Missing values
+
+All multivariate methods in `mixOmics` can be performed with missing values. Refer to their specific pages to determine if a given method cannot handle missing values. These use the **NIPALS** algorithm. Refer to [Missing Values](http://mixomics.org/methods/missing-values/) for further information. 
+
+### Analysing repeated measurement or a cross-over design
+
+For studies using a repeated measurement methodology, `mixOmics` has an incorporated *multilevel* functionality. Most functions within the package contain a `multilevel` parameter which handles multiple samples from the same individual. This can also be achieved through the `withinVariation()` function. Refer to [Multilevel](http://mixomics.org/methods/multilevel/) for further information. 

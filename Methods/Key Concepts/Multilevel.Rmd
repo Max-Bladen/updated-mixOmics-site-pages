@@ -1,0 +1,92 @@
+---
+#title: "Multilevel"
+author: "KA Le Cao, Xin-Yi Chua"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, 
+                      echo= TRUE, 
+                      warning=FALSE, 
+                      message=FALSE, 
+                      fig.show=TRUE, 
+                      fig.keep = 'all', 
+                      out.width = "70%")
+```
+
+# Multilevel Analysis
+
+A multilevel, multivariate approach was developed in order to be able to accurately assess the complex structures of repeated measurement design data (which commonly use multiple different assays). This is where different treatments are applied onto the same subjects, or the same subjects were recorded at numerous time points. The issue with this type of data is that the variation between individuals may dwarf the variation that exists between the treatment groups, such that samples from a given individual will cluster together and provide little insight to the biological differences between the treatment groups. 
+
+The "multilevel" methodology was developed in collaboration with Dr. B. Liquet. Its implementation within `mixOmics` allows for both supervised and unsupervised frameworks, as well as one- or two- factor frameworks, to utilise the multilevel methodology. This procedure has been shown to markedly increase the quality of feature selection and/or classification accuracy [1]. 
+
+Many different functions (`pls()`, `spls()`, `plsda()`, `splsda()`, `pca()` and `spca()`) within the package contain the `multilevel` argument. In all these cases, the `withinVariation()` is called internally to extract the desired variation from the original dataframe. `withinVariation()` can be called manually, as will be outlined below. 
+
+
+## Requirements for a Multilevel Analysis
+
+``` {r}
+library(mixOmics) # import the mixOmics library
+data(vac18) # extract the vac18 data
+```
+
+There are two main requirements for a multilevel analysis to be applicable and useful. Firstly, the data must have a repeated design. This may be across different time points (eg. prior- and post-treatment) or across different body sites (eg. microbiome samples from different organs within the one individual). This will be represented by the sample IDs of the dataset being repeated more than once. This can be seen for the `vac18` study included in the package:
+
+``` {r}
+# the first row is the sample IDs, the second row is the corresponding frequency of each ID
+summary(as.factor(vac18$sample))
+```
+Note that this methodology works in unbalanced design scenarios (the frequency of sample IDs is not uniform). 
+
+Secondly, this method will be beneficial when the individual variation is significantly greater than the repeated measure variation. As mentioned above, this is when samples from the same individual are clustered more tightly compared to samples from the same group (ie. treatment or time). In this case, multilevel decomposition will reveal subtle differences which would otherwise be masked by the individual variation. 
+
+Below in Figure 1, a PCA plot on the original dataframe and a PCA plot on the multilevel decomposed dataframe are depicted. Looking at the original dataframe, samples from the same individual (shown by the number of each point) can be seen with high proximity and the treatment groups (shown by the colour of the point) seem to overlap considerably. This is the scenario where multilevel analysis will be advantageous to utilise. The decomposed dataframe separates the treatment groups much better as the samples from the same individual are less clustered.
+
+```{r, fig.show='hold', out.width = '49%'}
+# undergo pca and plot samples without any multilevel decomposition
+pca.result <- pca(vac18$genes, scale = TRUE)
+plotIndiv(pca.result, 
+          ind.names = vac18$sample, 
+          group = vac18$stimulation, 
+          title = 'Figure 1a: PCA on VAC18 data')
+
+# undergo pca and plot samples with multilevel decomposition
+pca.result <- pca(vac18$genes, multilevel = vac18$sample, scale = TRUE)
+plotIndiv(pca.result, 
+          ind.names = vac18$sample, 
+          group = vac18$stimulation, 
+          legend = TRUE, 
+          legend.title = "Treatment", 
+          title = 'Figure 1b: Multilevel PCA on VAC18 data')
+```
+
+<p style="text-align: center">FIGURE 1: PCA plots of the original vac18 gene expression data and the multilevel decomposition on the same dataset</p>
+
+Figure 1b can be yielded by using the `withinVariation()` function manually. 
+
+``` {r, eval = FALSE}
+X <- vac18$genes # extract dataframe
+design <- data.frame(sample = vac18$sample) # set multilevel design using sample IDs for each instance
+Xw <- withinVariation(X, design) # decompose the dataframe
+
+pca.result <- pca(Xw, scale = TRUE) # apply pca to decomposed dataframe
+plotIndiv(pca.result, ind.names = vac18$sample, group = vac18$stimulation) # plot samples
+```
+
+## Difference between decomposition methods
+
+As mentioned directly above, the multilevel decomposition of a data frame can be achieved through the use of the `withinVariation()` function prior to model building or by passing in the `multilevel` parameter during model building. In some cases, these are essentially equivalent. This is not always the case however. In regards to classification models particularly, the resulting performance may vary quite drastically. 
+
+The tuning functions for methods such as `splsda()` require that each of the inputted samples are independent of one another. Through use of `multilevel`, `tune.multilevel()` ensures that all other samples from the same same individual are removed during the cross-validation procedure - hence all samples would be independent. This is not the case when using the `withinVariation()` function manually - though its action should make the samples effectively independent. 
+
+The primary take away from this disclaimer is that while use of the `multilevel` parameter as part of tuning is simpler and usually results in a better model, this is not guaranteed. Also, using `multilevel` is on average considerably slower than `withinVariation()`. In the case where performance is suboptimal, the use of `withinVariation()` should be explored. 
+
+# Case study
+
+See the [Case Study: Multilevel Vac18](http://mixomics.org/case-studies/multilevel-vac18-case-study/) and [Case Study: Multilevel Liver Toxicity](http://mixomics.org/case-studies/multilevel-liver-toxicity-case-study/) for more tuning details and plotting options.
+
+# References
+
+1. [Liquet, B., Lê Cao, K.A., Hocini, H. and Thiébaut, R., 2012. A novel approach for biomarker selection and the integration of repeated measures experiments from two assays. BMC bioinformatics, 13(1), p.325.](https://bmcbioinformatics.biomedcentral.com/articles/10.1186/1471-2105-13-325)

@@ -1,0 +1,286 @@
+---
+#title: "MixMC Koren Bodysite Case Study"
+output: html_document
+
+---
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, echo= TRUE, warning=FALSE, message=FALSE,
+                      fig.show=TRUE, fig.keep = 'all')
+```
+ 
+# Case Study of MixMC sPLS-DA with Koren Bodysite data
+
+The mixMC framework is one that is specifically built for microbial datasets and will be used here on the Koren Bodysite dataset yielded by Koren et al, 2011 [1]. A sPLS-DA methodology will be employed in order to predict the bodysite a given sample was drawn from based on the OTU data (**O**perational **T**axonomic **U**nit). The model will select the optimal set of OTUs to perform this prediction.
+
+For background information on the mixMC or sPLS-DA methods, refer to the [MixMC Method Page](http://mixomics.org/mixmc-methodology/) and [sPLS-DA Method Page](http://mixomics.org/methods/spls-da/).
+
+## R script
+
+The R script used for all the analysis in this case study is available [here](http://mixomics.org/wp-content/uploads/2022/01/mixMC-Koren-Bodysite-Case-Study-Non-repeated.zip).
+
+## To begin
+
+Load the latest version of mixOmics. Note that the seed is set such that all plots can be reproduced. This should **not** be included in proper use of these functions.
+
+```{r}
+library(mixOmics) # import the mixOmics library
+
+set.seed(5249) # for reproducibility, remove for normal use
+```
+
+### The data
+
+The Koren bodysite dataset derives from an examination of the link between oral, gut and plaque microbial communities in patients with atherosclerosis (vs. controls). While the original methodology of this study involved repeated measures, for the sake of simplicity it will be considered as **non-repeated** for this case study. It is assumed that the data are offset and pre-filtered, as described in [mixMC pre-processing steps](http://mixomics.org/mixmc-methodology/mixmc-preprocessing/).
+
+The `mixOmics` Koren dataset is accessed via `Koren.16S` and contains the following:
+
+- `Koren.16S$data.TSS` (continuous matrix): 43 rows and 980 columns. The prefiltered
+normalised data using Total Sum Scaling normalisation.
+- `Koren.16S$data.raw` (continuous matrix): 43 rows and 980 columns. The prefiltered raw
+count OTU data which include a 1 offset (i.e. no 0 values).
+- `Koren.16S$taxonomy` (categorical matrix): 980 rows and 7 columns. Contains the taxonomy (ie. Phylum, ... Genus, Species) of each OTU.
+- `Koren.16S$indiv` (categorical matrix): 43 rows and 22 columns. Contains all the sample meta data recorded.
+- `Koren.16S$bodysite` (categorical vector): factor of length 43 indicating the bodysite with levels `arterial plaque`, `saliva` and `stool`.
+
+The raw OTU data will be used as predictors (**X** dataframe) for the bodysite (**Y** vector). The dimensions of the predictors is confirmed and the distribution of the response vector is observed.
+
+``` {r}
+data("Koren.16S") # extract the microbial data
+X <- Koren.16S$data.raw # set the raw OTU data as the predictor dataframe
+Y <- Koren.16S$bodysite # set the bodysite class as the response vector
+
+dim(X) # check dimensions of predictors
+summary(Y) # check distribution of response
+```
+
+
+## Initial Analysis
+
+### Preliminary Analysis with PCA
+
+The first exploratory step involves using PCA (unsupervised analysis) to observe the general structure and clustering of the data to aid in later analysis. As this data are compositional by nature, a centered log ratio (CLR) transformation needs to be undergone in order to reduce the likelihood of spurious results. This can be done by using the `logratio` parameter in the PCA function.
+
+Here, a PCA with a sufficiently large number of components (`ncomp = 10`) is generated to choose the final reduced dimension of the model. Using the 'elbow method' in Figure 1, it seems that two components will be more than sufficient for a PCA model.
+
+``` {r, fig.align = "center"}
+koren.pca = pca(X, ncomp = 10, logratio = 'CLR') # undergo PCA with 10 comps
+
+plot(koren.pca) # plot explained variance
+```
+
+<p style="text-align: center;">FIGURE 1: Bar plot of the proportion of explained variance by each principal component yielded from a PCA.</p>
+
+Below, the samples can be seen projected onto the first two Principal Components (Figure 2). The separation of each bodysite can be clearly seen, even just across these two components (account for a total of 37% of the OTU variation). It seems that the first component is very good at defining the `arterial plaque` bodysite against the other two bodysites while the second discriminates between the `saliva` and `stool` bodysites very well. 
+
+``` {r, fig.align = "center"}
+koren.pca = pca(X, ncomp = 2, logratio = 'CLR') # undergo PCA with 2 components
+
+plotIndiv(koren.pca, # plot samples projected onto PCs
+          ind.names = FALSE, # not showing sample names
+          group = Y, # color according to Y
+          legend = TRUE,
+          title = 'Koren OTUs, PCA Comps 1&2')
+```
+
+<p style="text-align: center;">FIGURE 2: Sample plots from PCA performed on the Koren OTU data. Samples are projected into the space spanned by the first two components.</p>
+
+### Initial sPLS-DA model
+
+The mixMC framework uses the sPLS-DA multivariate analysis from mixOmics [3]. Hence, the next step involves generating a basic PLS-DA model such that it can be tuned and then evaluated. In many cases, the maximum number of components needed is `k-1` where `k` is the number of categories within the outcome vector (**y**) - which in this case is 3. Once again, the `logratio` parameter is used here to ensure that the OTU data are transformed into an Euclidean space.
+
+``` {r}
+basic.koren.plsda = plsda(X, Y, logratio = 'CLR', 
+                          ncomp = nlevels(Y))
+```
+
+## Tuning sPLS-DA
+
+### Selecting the number of components
+#### The **ncomp** Parameter
+
+To set a baseline from which to compare a tuned model, the performance of the basic model is assessed via the `perf()` function. Here, a 5-fold, 10-repeat design is utilised. To obtain a more reliable estimation of the error rate, the number of repeats should be increased (between 50 to 100). Figure 3 shows the error rate as more components are added to the model (for all three distance metrics). The Balanced Error Rate (BER) is more appropriate to use here due to the unbalanced response vector (`arterial plaque` has less samples than the other two bodysites). Across all three distance metrics, a model using three components had the lowest error rate. Hence, it seems that three components is appropriate.
+
+``` {r, fig.align = "center"}
+# assess the performance of the sPLS-DA model using repeated CV
+basic.koren.perf.plsda = perf(basic.koren.plsda,  
+                              validation = 'Mfold', 
+                              folds = 5, nrepeat = 10, 
+                              progressBar = FALSE)
+
+# extract the optimal component number
+optimal.ncomp <- basic.koren.perf.plsda$choice.ncomp["BER", "max.dist"] 
+
+plot(basic.koren.perf.plsda, overlay = 'measure', sd=TRUE) # plot this tuning
+```
+
+<p style="text-align: center;">FIGURE 3: Classification error rates for the basic sPLS-DA model on the Koren OTU data. Includes the standard and balanced error rates across all three distance metrics.</p>
+
+### Selecting the number of variables
+#### The **keepX** Parameter
+
+With the suggestion that `ncomp = 3` is the optimal choice, the number of features to use for each of these components needs to be determined (`keepX`). This will be done via the `tune.splsda()` function. Again, a 5-fold, 10-repeat cross validation process is used but in reality these values should be higher. Figure 4 below shows that the error rate is minimised when 2 components are included in the sPLS-DA, whereas the third component seems to add noise. The diamonds indicate the optimal `keepX` variables to select on each component based on the balanced error rate. 
+
+Note that the selected `ncomp` from the `tune.splsda()` and `perf()` functions are different. As the sparse model (sPLS-DA) will be used, `ncomp = 2` is the more appropriate choice.
+
+``` {r, fig.align = "center"}
+grid.keepX = c(seq(5,150, 5))
+
+koren.tune.splsda = tune.splsda(X, Y,
+                          ncomp = optimal.ncomp, # use optimal component number
+                          logratio = 'CLR', # transform data to euclidean space
+                          test.keepX = grid.keepX,
+                          validation = c('Mfold'),
+                          folds = 5, nrepeat = 10, # use repeated CV
+                          dist = 'max.dist', # maximum distance as metric
+                          progressBar = FALSE)
+
+# extract the optimal component number and optimal feature count per component
+optimal.keepX = koren.tune.splsda$choice.keepX[1:2] 
+optimal.ncomp = koren.tune.splsda$choice.ncomp$ncomp 
+
+plot(koren.tune.splsda) # plot this tuning
+``` 
+
+<p style="text-align: center;">FIGURE 4: Tuning keepX for the sPLS-DA performed on the Koren OTU data. Each coloured line represents the balanced error rate (y-axis) per component across all tested keepX values (x-axis) with the standard deviation based on the repeated cross-validation folds.</p>
+
+## Final Model
+
+Following this tuning, the final sPLS-DA model can be constructed using these optimised values.
+
+``` {r}
+koren.splsda = splsda(X,  Y, logratio= "CLR", # form final sPLS-DA model
+                      ncomp = optimal.ncomp, 
+                      keepX = optimal.keepX)
+```
+
+## Plots
+
+### Sample Plots
+
+The sample plot found in Figure 5 depicts the projection of the samples onto the first two components of the sPLS-DA model. There is distinct separation of each bodysite as shown by the lack of any overlap of the 95% confidence ellipses. 
+
+``` {r, fig.align = "center"}
+plotIndiv(koren.splsda,
+          comp = c(1,2),
+          ind.names = FALSE,
+          ellipse = TRUE, # include confidence ellipses
+          legend = TRUE,
+          legend.title = "Bodysite",
+          title = 'Koren OTUs, sPLS-DA Comps 1&2')
+```
+
+<p style="text-align: center;">FIGURE 5: Sample plots from sPLS-DA performed on the Koren OTU data. Samples are projected into the space spanned by the first two components.</p>
+
+Another way to visualise the similarity of samples is through the use of a clustered image map (CIM). Figure 6 clearly shows which OTUs are associated with a given bodysite. This plot also depicts the sparsity commonly seen in microbial datasets. 
+
+``` {r, eval = FALSE}
+cim(koren.splsda,
+    comp = c(1,2),
+    row.sideColors = color.mixo(Y), # colour rows based on bodysite
+    legend = list(legend = c(levels(Y))),
+    title = 'Clustered Image Map of Koren Bodysite data')
+```
+
+<img src="http://mixomics.org/wp-content/uploads/2022/01/Koren-CIM.png" alt="newplot" style="max-width: 80%; display: block; margin: auto;"/>
+
+<p style="text-align: center;">FIGURE 6: Clsutered Image Map of the Koren OTU data after sPLS-DA modelling. Only the keepX selected feature for components 1 and 2 are shown, with the colour of each cell depicting the raw OTU value after a CLR transformation.</p>
+
+### Variable Plots
+
+Interpretting Figure 7 below in conjunction with Figure 5 provides key insights into what OTUs are responsible for identifying each bodysite. Note that `cutoff = 0.7` such that any feature with a vector length less than 0.7 is not shown. Three distinct clusters of OTUs can be seen - one of each seemingly corresponding to one of the three bodysites. The feature found by itself (`4391625`) could be interpretted as either:
+
+- being important in the identification of both the `arterial plaque` and `saliva` bodysites, or
+- being important in the identification that a sample does not belong to the `stool` bodysite.
+
+``` {r, fig.align = "center"}
+plotVar(koren.splsda,
+        comp = c(1,2),
+        cutoff = 0.7, rad.in = 0.7,
+        title = 'Koren OTUs, Correlation Circle Plot Comps 1&2')
+```
+
+<p style="text-align: center;">FIGURE 7: Correlation circle plot representing the OTUs selected by sPLS-DA performed on the Koren OTU data. Only the OTUs selected by sPLS-DA are shown in components 1 and 2. Cutoff of 0.7 used</p>
+
+The network plot seen in Figure 8 shows furthers the understanding of which OTUs are contributing to each bodysite. For each bodysite, there is a grouping of OTUs which identify that bodysite and none other. There are also two small clusters which contain OTUs which are found at two of the three bodysites, showing a similarity in the microbial communities of these areas. Interestingly, the `saliva` and `arterial plaque` bodysites share no common OTUs (at `cutoff = 0.5`). 
+
+
+``` {r, eval = FALSE}
+network(koren.splsda,
+        cutoff = 0.5,
+        color.node = c("orange","lightblue"))
+```
+
+<img src="http://mixomics.org/wp-content/uploads/2022/01/Koren-Network.png" alt="newplot" style="max-width: 80%; display: block; margin: auto;"/>
+
+<p style="text-align: center;">FIGURE 8: Relevance Network graph of the Koren OTUs selected by sPLS-DA on this dataset.</p>
+
+## Evaluation of sPLS-DA
+
+The `mixOmics` package also contains the ability to assess the classification performance of the sPLS-DA model that was constructed via the `perf()` function once again. The mean error rates per component and the type of distance are output. It can be beneficial to increase the number of repeats for more accurate estimations. It is clear from the below output that adding the second component drastically decreases the error rate. 
+
+``` {r}
+# for reproducible results for this code, remove for your own code
+set.seed(5249)  
+
+# evaluate classification, using repeated CV and maximum distance as metric
+koren.perf.splsda = perf(koren.splsda, validation = 'Mfold', 
+                         folds = 5, nrepeat = 10, 
+                         progressBar = FALSE, dist = 'max.dist') 
+
+koren.perf.splsda$error.rate
+```
+
+
+## OTU Selection
+
+The sPLS-DA selects the most discriminative OTUs that best characterize each body site. The below loading plots (Figures 9a&b)  display the abundance of each OTU and in which body site they are the most abundant for each sPLS-DA component. Viewing these bar plots in combination with Figures 5 and 7 aid in understanding the similarity between bodysites. For both components, the 20 highest contributing features are depicted.
+
+OTUs selected on the first component are mostly highly abundant in `stool` samples based on the mean of each OTU per body site. All OTUs seleced on the second component are strongly associated with the two other body sites. A positive contribution to the second component indicates association with the `saliva` bodysite while a negative value is indicative of the `arterial plaque` site.
+
+``` {r, fig.show = "hold", out.width = "49%"}
+plotLoadings(koren.splsda, comp = 1, 
+             method = 'mean', contrib = 'max',  
+             size.name = 0.8, legend = FALSE,  
+             ndisplay = 20,
+             title = "(a) Loadings of first component")
+
+plotLoadings(koren.splsda, comp = 2, 
+             method = 'mean', contrib = 'max',   
+             size.name = 0.7,
+             ndisplay = 20,
+             title = "(b) Loadings of second comp.")
+```
+
+<p style="text-align: center;">FIGURE 9: The loading values of the top 20 contributing OTUs to the first (a) and second (b) components of a sPLS-DA undergone on the Koren OTU dataset. Each bar is coloured based on which bodysite had the maximum, mean value of that OTU.</p>
+
+To take this a step further, the stability of each OTU on these components can be assessed via the output of the `perf()` function. The below values (between 0 and 1) indicate the proportion of models (during the repeated cross validation) that used that given OTU as a contributor to the first sPLS-DA component. Those with high stabilities are likely to be the most important to defining a certain component. 
+
+``` {r}
+# determine which OTUs were selected
+selected.OTU.comp1 = selectVar(koren.splsda, comp = 1)$name 
+
+# display the stability values of these OTUs
+koren.perf.splsda$features$stable[[1]][selected.OTU.comp1] 
+```
+
+## More information on Plots
+
+For a more in depth explanation of how to use and interpret the plots seen, refer to the following pages:
+
+- [`plotIndiv()` - Sample Plot](http://mixomics.org/graphics/sample-plots/plotindiv/)
+- [`plotLoadings()` - Loading Plot](http://mixomics.org/graphics/variable-plots/plotloadings/)
+- [`plotVar()` - Correlation Circle Plot](http://mixomics.org/graphics/variable-plots/plotvar/)
+- [`cim()` - Cluster Image Maps](http://mixomics.org/graphics/variable-plots/cim/)
+- [`network()` - Relevance Network Graph](http://mixomics.org/graphics/variable-plots/network/)
+
+
+## References
+
+1. [Koren, O., Knights, D., Gonzalez, A., Waldron, L., Segata, N., Knight, R., Huttenhower, C. and Ley, R.E., 2013. A guide to enterotypes across the human body: meta-analysis of microbial community structures in human microbiome datasets. PLoS Comput Biol, 9(1), p.e1002863](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1002863)
+
+2. [Lê Cao KA, Costello ME, Lakis VA, Bartolo F, Chua XY, et al. (2016) MixMC: A Multivariate Statistical Framework to Gain Insight into Microbial Communities. PLOS ONE 11(8): e0160169](http://journals.plos.org/plosone/article/metrics?id=10.1371/journal.pone.0160169)
+
+3. [Lê Cao, K.-A., Boitard, S., Besse, P.: Sparse PLS Discriminant Analysis: biologically relevant feature selection and graphical displays for multiclass problems. BMC bioinformatics 12(1), 253 (2011)](https://bmcbioinformatics.biomedcentral.com/articles/10.1186/1471-2105-12-253)
+
+4. [Rohart F, Gautier B, Singh A, Lê Cao K-A (2017). mixOmics: an R package for 'omics feature selection and multiple data integration.](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1005752)

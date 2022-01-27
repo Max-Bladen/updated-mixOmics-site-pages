@@ -1,0 +1,60 @@
+---
+#title: "mixMC Main"
+output: html_document
+
+---
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, echo= TRUE, warning=FALSE, message=FALSE, fig.align = 'center',
+                      fig.show=TRUE, fig.keep = 'all', out.width = '50%')
+```
+
+# mixMC
+
+[**mixMC**](http://journals.plos.org/plosone/article/metrics?id=10.1371/journal.pone.0160169) is a multivariate framework implemented in `mixOmics` for microbiome data analysis. The framework takes into account the inherent characteristics of microbiome data, namely sparsity (a large number of zeros in the data) and compositionality (occurring naturally in ecosystems, as well as resulting sequencing artefacts). The **mixMC** framework aims to identify key microbial communities associated with their habitat or environment.  
+
+**mixMC** addresses the limitations of existing multivariate methods for microbiome studies and proposes unique analytical capabilities: it handles compositional and sparse data, repeated-measures experiments and multiclass problems. It also highlights important discriminative features, and provides interpretable graphical outputs to better understand the microbial communities' contribution to each habitat. The framework from our paper is summarised below:
+
+<img src="http://mixomics.org/wp-content/uploads/2022/01/mixMC-Framework.jpg" alt="newplot" style="max-width: 80%; display: block; margin: auto;"/>
+
+## Functionality of mixMC within **mixOmics**
+
+**mixMC** is a pipeline set up for microbial communities, using some of the standards methods in `mixOmics` but with a bit of tweaking. The method sPLS-DA has been improved with CLR (centered log ratio) transformation and includes a multilevel decomposition for repeated measurements design that are commonly encountered in microbiome studies. The multilevel approach we developed in [4] enables the detection of subtle differences when high inter-subject variability is present due to microbial sampling performed repeatedly on the same subjects but in multiple habitats. To account for subject variability, the data variance is decomposed into *within variation* (due to habitat) and *between subject variation* [5], similar to a within-subjects ANOVA in univariate analyses.
+
+## **mixMC** going forward
+
+- In collaboration with colleagues from INRA Toulouse, France, the package  `mixKernel` is available on our website. This package allows for the integration of different types of data using kernel models. It internally calls functions from the `mixOmics` package. An example of its usage can be found in the first case study listed below.
+
+- We are working on how to manage batch effects in microbiome studies, see [6] and soon a new multivariate method to correct for batch effects.
+
+## Case Studies
+
+This site features three different case studies which exemplify the usage the mixMC framework in different microbial contexts. Under each of the below listed case studies, a link to download the *full 16S dataset* can be found (each case study uses a subset of this data).
+
+- [MixMC Non-repeated Koren Bodysite Case Study](http://mixomics.org/mixmc-methodology/mixmc-koren-bodysite-case-study/)
+  - [Koren Bodysite Dataset](http://mixomics.org/wp-content/uploads/2017/01/Koren.zip)
+- [MixMC Repeated HMP Bodysite Case Study](http://mixomics.org/mixmc-methodology/mixmc-hmp-bodysite-case-study/)
+  - [HMP Bodysite Dataset](http://mixomics.org/wp-content/uploads/2016/12/HMB.zip)
+- [MixMC MixKernel Tara Ocean Case Study](http://mixomics.org/mixkernel/)
+  - [Tara Ocean Dataset](http://mixomics.org/wp-content/uploads/2016/12/Oral.zip)
+  
+## Further Reading
+
+The `mixOmics` mixMC methodology has been applied in real research contexts. A few examples can be seen below:
+
+- [Kong, G., Cao, K., Judd, L., Li, S., Renoir, T., & Hannan, A. (2020). Microbiome profiling reveals gut dysbiosis in a transgenic mouse model of Huntington's disease. Neurobiology Of Disease, 135, 104268. https://doi.org/10.1016/j.nbd.2018.09.001](https://www.sciencedirect.com/science/article/pii/S0969996118305333)
+- [Murtaza N, Burke LM, Vlahovich N, Charlesson B, O’Neill HM, Ross ML, Campbell KL, Krause L, Morrison M. Analysis of the Effects of Dietary Pattern on the Oral Microbiome of Elite Endurance Athletes. Nutrients. 2019; 11(3):614](https://www.mdpi.com/2072-6643/11/3/614/htm)
+
+## References
+
+1. [Lê Cao KA, Costello ME, Lakis VA, Bartolo F, Chua XY, et al. (2016) MixMC: A Multivariate Statistical Framework to Gain Insight into Microbial Communities. PLOS ONE 11(8): e0160169](http://journals.plos.org/plosone/article/metrics?id=10.1371/journal.pone.0160169)
+
+2. [Aitchison, J., 1982. The statistical analysis of compositional data. Journal of the Royal Statistical Society. Series B (Methodological), pp.139-177.](https://www.jstor.org/stable/2345821?seq=1)
+
+3. [Filzmoser, P., Hron, K. and Reimann, C., 2009. Principal component analysis for compositional data with outliers. Environmetrics, 20(6), pp.621-632.](https://onlinelibrary.wiley.com/doi/abs/10.1002/env.966)
+
+4. [Liquet, B., Lê Cao, K.A., Hocini, H. and Thiébaut, R., 2012. A novel approach for biomarker selection and the integration of repeated measures experiments from two assays. BMC bioinformatics, 13(1), p.325.](https://bmcbioinformatics.biomedcentral.com/articles/10.1186/1471-2105-13-325)
+
+5. [Westerhuis, J.A., van Velzen, E.J., Hoefsloot, H.C. and Smilde, A.K., 2010. Multivariate paired data analysis: multilevel PLSDA versus OPLSDA. Metabolomics, 6(1), pp.119-128.](https://link.springer.com/article/10.1007/s11306-009-0185-z)   
+
+6. [Wang Y and Lê Cao K-A (2019). Managing Batch Effects in Microbiome Data. Briefings in Bioinformatics](https://doi.org/10.1093/bib/bbz105)

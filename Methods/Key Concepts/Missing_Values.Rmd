@@ -1,0 +1,71 @@
+---
+#title: "Missing Values"
+date: "20 January 2017"
+output: html_document
+---
+
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, 
+                      echo= TRUE, 
+                      warning=FALSE, 
+                      message=FALSE, 
+                      fig.show=TRUE, 
+                      fig.keep = 'all', 
+                      fig.align = "center",
+                      out.width = "70%")
+```
+
+# Missing values
+
+All methodologies implemented in `mixOmics` can handle missing values. In particular, **(s)PLS**, **(s)PLS-DA**, **(s)PCA** utilise the **NIPALS** (**N**on-linear **I**terative **P**artial **L**east **S**quares) algorithm as part of their dimension reduction procedures. This algorithm is built to handle `NAs` [1].
+
+This is implemented through the `nipals()` function within `mixOmics`. This function is called internally by the above methods but can also be used manually, as can be seen below. 
+
+### Usage in *mixOmics*
+
+```{r}
+library(mixOmics)
+data(liver.toxicity)
+X <- liver.toxicity$gene[, 1:100] # a reduced size data set
+
+## pretend there are 20 NA values in our data
+na.row <- sample(1:nrow(X), 20, replace = TRUE)
+na.col <- sample(1:ncol(X), 20, replace = TRUE)
+X.na <- as.matrix(X)
+
+## fill these NA values in X
+X.na[cbind(na.row, na.col)] <- NA
+sum(is.na(X.na)) # number of cells with NA
+
+# this might take some time depending on the size of the data set
+nipals.tune = nipals(X.na, ncomp = 10)$eig
+barplot(nipals.tune, xlab = 'Principal component', ylab = 'Explained variance')
+```
+
+<figcaption style="text-align: center">FIGURE 1: Column graph of the explained variance of each Principal Component.</figcaption>
+
+If missing values need to be imputed, the package contains `impute.nipals()` for this scenario. **NIPALS** is used to decompose the dataset. The resulting components, singular values and feature loadings can be used to reconstitute the original dataset, now with estimated values where the missing values were previously. To allow for the best estimation of missing values, there is a large number of components being used (`ncom = 10`).
+
+``` {r}
+X.impute <- impute.nipals(X = X.na, ncomp = 10)
+sum(is.na(X.impute)) # number of cells with NA
+```
+
+The difference between the imputed and real values can be checked. Here are the original values:
+
+``` {r}
+id.na = is.na(X.na) # determine position of NAs in dataframe
+
+X[id.na] # show original values
+```
+
+The values which were estimated via the **NIPALS** algorithm:
+
+``` {r}
+X.impute[id.na] # show imputted values
+```
+
+# References
+
+1. [Wold, H. (1973). Nonlinear Iterative Partial Least Squares (NIPALS) Modelling: Some Current Developments. Multivariate Analysis–III, 383-407. https://doi.org/10.1016/b978-0-12-426653-7.50032-6](https://www.sciencedirect.com/science/article/pii/B9780124266537500326)

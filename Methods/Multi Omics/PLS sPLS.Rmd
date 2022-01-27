@@ -1,0 +1,105 @@
+---
+#title: "sPLS"
+#author: "KA Le Cao, Sebastien Dejean, Xin-Yi Chua, Danielle Davenport"
+date: "`r Sys.Date()`"
+output: html_document
+---
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, 
+                      echo = TRUE, 
+                      warning = FALSE, 
+                      message = FALSE, 
+                      fig.show = TRUE, 
+                      fig.keep = 'all', 
+                      fig.align = "center",
+                      out.width = "70%") 
+```
+
+# Quick Start
+
+```{r}
+library(mixOmics) # import the mixOmics library
+data(liver.toxicity) # extract the liver toxicity data
+X <- liver.toxicity$gene # use the gene expression data as the X matrix
+Y <- liver.toxicity$clinic # use the clinical data as the Y matrix
+```
+
+### PLS
+
+``` {r, eval = FALSE}
+pls.result <- pls(X, Y) # run the method
+plotIndiv(pls.result)   # plot the samples
+plotVar(pls.result)     # plot the variables
+```
+
+`?pls` can be run to determine all default arguments of this function:
+
+* Number of components (`ncomp = 2`): The first two PLS components are calculated,
+* Scaling of data (`scale = TRUE`): Each data set is scaled (each variable has a variance of 1 to enable easier comparison) - data are internally centered.
+* PLS mode (`mode = regression`): A PLS regression mode is performed.
+
+### sPLS
+
+``` {r, eval = FALSE}
+spls.result <- spls(X, Y, keepX = c(10, 20), keepY = c(3, 2))  # run the method
+plotIndiv(spls.result) # plot the samples
+plotVar(spls.result)   # plot the variables
+
+# extract the variables used to construct the first latent component
+selectVar(spls.result, comp = 1)$X$name 
+# depict weight assigned to each of these variables
+plotLoadings(spls.result, method = 'mean', contrib = 'max') 
+```
+
+`?spls` can be run to determine the default arguments of this function:
+
+* PLS mode (`mode = regression`): A PLS regression mode is performed.
+* If `keepx` and `keepY` are not supplied, this function will be equivalent to the `pls()` function as all variables will be used.
+* Uses the same defaults for `ncomp` and `scale` as the `pls()` function. 
+
+# Partial Least Squares
+
+Partial Least Squares, or Projection to Latent Structures, (PLS) [2, 3] is a robust, malleable multivariate projection-based method. It can be used to explore or explain the relationship between two continuous datasets. As with other projection methods, PLS seeks for linear combinations of the variables from each dataset in order to reduce the overall dimensionality of said data. The primary difference between PLS and CCA is that PLS maximises the covariance between the latent variables, rather than correlation. It is able to simultaneously model multiple response variables as well as handle noisy, correlated variables. 
+
+PLS is particularly efficient when *P + Q > N*, where *P* is the number of variables in the first dataset, *Q* is the number of variables in the second dataset and *N* is the number of samples in each. Hence, it is an extremely powerful algorithm when dealing with omics data, which commonly has high dimensionality and contains correlated variables. 
+
+# Sparse Partial Least Squares
+
+While PLS is highly efficient, when operating on data of high dimensionality its interpretability suffers significantly. Sparse Partial Least Squares (sPLS) [4, 5] is the answer to this issue, such that it is able to perform simultaneous variable selection on both datasets. This is done by including the LASSO penalisation on loading vectors to reduce the number of original variables used when constructing latent variables. 
+
+Note: **X** and **Y** refer to the two omics datasets that PLS analyses.
+
+### PLS Modes
+
+There are two overarching types of PLS, which are:
+
+* PLS1: Univariate analysis, where **y** is a single variable
+* PLS2: Multivariate analysis, where **Y** is a matrix including more than one variable
+
+There are four different modes that can be used for the sPLS algorithm within the `mixOmics` package. This is inputted through the `mode` parameter. The modes include:
+
+* Regression (`mode = "regression"`): **X** and **Y** play asymmetric roles. Fits a linear relationship between multiple responses in **Y** and multiple predictors in **X**. Interchanging the roles of **X** and **Y** (as predictors and responses) would result in different latent variables. Useful when trying to explain the relationship between the two datasets. **Y** is deflated using information from **X**.
+* Canonical (`mode = "canonical"`): **X** and **Y** play symmetric roles. While not mathematically equivalent, the method is quite similar to CCA. It is appropriate to use when there is no *a priori* relationship between **X** and **Y** and as a replacement for CCA in very high dimensional contexts (when variables selection is desired). **Y** is deflated using information from **Y**. 
+* Invariant (`mode = "invariant"`): No matrix deflation occurs to allow a Redundancy Analysis to be undergone. 
+* Classic (`mode = "classic"`): Similar to the 'regression' mode, but produces different loading vectors associated with the **Y** matrix as different normalisations are used. Equivalent to the PLS2 model proposed by Tenenhaus (1998) [1]. 
+
+Note that in all cases the first component will be identical as matrix deflation only occurs after the first component is produced. Each method utilises a different style of matrix deflation. 
+
+# Case study
+
+For the PLS1 framework, see [here](https://mixomicsteam.github.io/Activities/pls-liver-case.html#example-pls1-regression).
+
+For the PLS2 framework, see [Case Study: sPLS Liver Toxicity](http://mixomics.org/case-studies/spls-liver-toxicity/)
+
+# References
+
+1. [Tenenhaus M. (1998) La régression PLS: théorie et pratique. Paris: Editions Technic.](https://books.google.com.au/books?hl=en&lr=&id=OesjK2KZhsAC&oi=fnd&pg=PA1&dq=La+r%C3%A9gression+PLS:+th%C3%A9orie+et+pratique&ots=ExOwA65xBI&sig=9x5k7NKS1neJhI86GOfxq4PmW0U#v=onepage&q=La%20r%C3%A9gression%20PLS%3A%20th%C3%A9orie%20et%20pratique&f=false)
+
+2. [Wold H. (1966) Estimation of principal components and related models by iterative least squares. In: Krishnaiah, P.R. (editors). Multivariate Analysis. Academic Press, N.Y., pp 391-420.](https://ci.nii.ac.jp/naid/20001378860/)
+
+3. [Wold, S., Sjöström, M., and Eriksson, L. (2001). Pls-regression: a basic tool of chemometrics. Chemometrics and intelligent laboratory systems, 58(2), 109–130.](https://www.sciencedirect.com/science/article/abs/pii/S0169743901001551)
+
+4. [Lê Cao K.-A., Martin P.G.P., Robert-Granié C. and Besse P. (2009) Sparse canonical methods for biological data integration: application to a cross-platform study. BMC Bioinformatics 10(34).](https://bmcbioinformatics.biomedcentral.com/articles/10.1186/1471-2105-10-34)
+
+5. [Lê Cao K.-A., Rossouw D., Robert-Granié C. and Besse P. (2008) A sparse PLS for variable selection when integrating Omics data. Statistical Applications in Genetics and Molecular Biology 7, article 35.](https://espace.library.uq.edu.au/view/UQ:205582/UQ205582_OA.pdf)

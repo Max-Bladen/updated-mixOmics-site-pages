@@ -1,0 +1,19 @@
+---
+#title: "More DIABLO Exmaples"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# More examples of analysis with DIABLO
+
+We evaluated DIABLO with:
+
+- a simulation study showing that DIABLO is able to select correlated and discriminatory features.
+- four multi-omics studies, integrating four omics datasets and benchmarked DIABLO against existing component-based supervised and unsupervised methods. We showed that the multi-omics biomarker signatures from DIABLO led to superior biological enrichment.
+- two multi omics case studies in breast cancer and asthma, highlighting the versatility of DIABLO for various experimental designs (single point, repeated measurements, pathway module based).
+
+All R codes and analyses are available at [the following link](http://amritsingh.ca/diablo/).
+

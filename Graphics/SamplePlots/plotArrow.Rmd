@@ -1,0 +1,87 @@
+---
+#title: "Arrow Plots"
+date: "`r Sys.Date()`"
+output: html_document
+---
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, 
+                      echo = TRUE, 
+                      warning = FALSE, 
+                      message = FALSE, 
+                      fig.show = TRUE, 
+                      fig.keep = 'all',
+                      out.width = "70%") 
+```
+
+# **plotArrow()** - Arrow Plot
+
+Arrow plots aid in visualising paired coordinates. For example, from two datasets, **X** and **Y**, arrow plots can show the agreement between pairs of points between the two datasets. The tail (or the start) of the arrow represents the location of the sample in the space spanned by the **X** components and the tip (or the end) indicates the location of the sample in the space spanned by the **Y** components. 
+
+Short arrows indicate that the sample shows a high level of agreement between the two datasets and a long arrow indicates disagreement. The  arrow lengths can be equivocated to the correlation between components associated to their respective data set for a given dimension.
+
+The parameters of this function are not complicated and are homogeneous with most of the other plotting functions within the package. For more information, use `?plotArrow` in the R console. 
+
+``` {r}
+library(mixOmics) # load in the mixOmics package
+```
+
+## **plotArrow()** in rCCA
+
+The arrow plot is particularly useful when undergoing any form of **CCA** analysis (including **rCCA** and **(s)GCCA**). In this example, the length of the arrows indicate the level of agreement or disagreement between the *canonical variates* of the **X** (lipid concentration) dataset and the **Y** (gene expression) dataset. Figure 1 shows that these two datasets are highly correlated as all the arrows are quite short.
+
+``` {r, fig.align = "center", out.width = '80%'}
+data(nutrimouse) # extract the nutrimouse data
+X <- nutrimouse$lipid # use lipid concentration data as X dataset
+Y <- nutrimouse$gene # use genetic expression data as Y dataset
+
+# undergo rcc analysis, using the shrinkage method for regularisation
+rcc.nutrimouse <- rcc(X,Y, ncomp = 3, method = 'shrinkage') 
+
+# plot the samples' relationship using an arrow plot
+plotArrow(rcc.nutrimouse, 
+          ind.names = FALSE, # reduce visual clutter
+          group = nutrimouse$diet)
+```
+
+<p style="text-align: center;">FIGURE 1: Arrow sample plot from the rCCA performed on the nutrimouse data to represent the samples projected onto the first two canonical variates. Each arrow represents one sample</p>
+
+## **plotArrow()** in DIABLO
+
+The arrow plot has been generalised to handle N-integration frameworks, where there are more than two datasets being integrated. In this scenario, the start (tail) of the arrow indicates the location of the centroid of all datasets (blocks) for a given sample. The end (tip) of each arrow indicates the location of a given sample in each individual block, projected onto the averaged *latent components*.
+
+Note that for Figure 2 the datasets were sliced to only contain 15 samples each. This results in there being 15 centroids, each with three arrows pointing off them (for each dataset). This is done purely to reduce the visual clutter in order to exemplify `plotArrow()`'s use. 
+
+``` {r, fig.align = "center", out.width = '90%'}
+data(breast.TCGA) # extract The Cancer Genome Atlas breast data
+
+# take subset of samples to reduce the number to plot. otherwise it is 
+# very difficult to look at any individual sample with >150 samples
+idx = seq(1, length(breast.TCGA$data.train$subtype), 10)
+
+# set the blocks
+X <- list(mRNA = breast.TCGA$data.train$mrna[idx,],
+          miRNA = breast.TCGA$data.train$mirna[idx,],
+          protein = breast.TCGA$data.train$protein[idx,])
+
+Y <- breast.TCGA$data.train$subtype[idx] # set the resposne variable
+
+diablo.tcga <- block.splsda(X, Y, ncomp = 2) # undergo multiblock sPLS-DA
+
+# plot the samples using an arrow plot
+plotArrow(diablo.tcga, 
+          ind.names = FALSE, # reduce visual clutter
+          legend = TRUE,
+          title = 'TCGA, DIABLO comp 1 - 2') 
+```
+
+<p style="text-align: center;">FIGURE 2: Arrow plot from multiblock sPLS-DA performed on the breast.TCGA study. The samples are projected into the space spanned by the first two components for each data set then overlaid across data sets</p>
+
+# Case Studies
+
+Refer to the following case studies for a more in depth look at interpreting the output of the `plotArrow()` function:
+
+- [rCCA - Nutrimouse](http://mixomics.org/rcca-nutrimouse/)
+- [DIABLO - Breast TCGA](http://mixomics.org/mixdiablo/diablo-tcga-case-study/)
+
+

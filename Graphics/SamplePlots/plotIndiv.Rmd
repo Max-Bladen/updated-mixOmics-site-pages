@@ -1,0 +1,200 @@
+---
+#title: "plotIndiv"
+#author: "KA Le Cao, Sebastien Dejean, Xin-Yi Chua, Danielle Davenport"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, echo= TRUE, warning=FALSE, message=FALSE, 
+                      fig.show=TRUE, fig.keep = 'all', out.width = '80%')
+```
+# **plotIndiv()** - Sample Plot
+
+The `plotIndiv()` function shows the relationship and similaries between samples. The samples are represented as points in a two (or three) dimensional subspace that is spanned by latent variables yeilded from the multivariate models. These plots allow for the clustering of samples to be evaluated. 
+
+When using this function, points can be coloured and titled. In unsupervised cases, this can lead to false assumptions about the clustering of the samples. It is good practice to inspect a plot with no colours or symbols to gain an unbiased perspective on the similarity of points within the dataset(s). 
+
+``` {r}
+library(mixOmics)
+data(nutrimouse)
+```
+
+## **plotIndiv()** Parameters
+
+There are many different parameters which can be input into `plotIndiv()` to control the visualisation. Here, the primary few will be explained in detail.  
+
+#### **title**
+
+While it may seem obvious, this parameter is worth explicitly noting. All figures should have an appropriate title so readers can easily identify what is being shown in a given plot. It will default to `"plotIndiv"`. A single string is passed into this parameter and examples of its use can be seen throughout this page. 
+
+#### **rep.space**
+
+When integrating two data sets, the `plotIndiv()` function enables the representation of the samples into a specific projection space:
+
+- The space spanned by the components associated to the **X** data set, using the argument `rep.space = X-variate`,
+- The space spanned by the components associated to the **Y** data set, using the argument `rep.space = Y-variate`,
+- The space spanned by the mean of the components associated to the **X** and **Y** data sets, using the argument `rep.space = XY-variate`.
+
+Figure 1a shows the default case when no argument for `rep.space` is provided. It will show each **X-** and **Y-** space separately. Figure 1b shows what the corresponding plot looks like if the **XY** subspace is used.
+
+``` {r, fig.show='hold', out.width = '49%'}
+X <- nutrimouse$lipid # set lipid concentrations as X dataset
+Y <- nutrimouse$gene # set genetic expression as Y dataset
+pls.nutri <- pls(X, Y, ncomp = 2) # undergo PLS regression
+
+# plot in separate subspaces
+plotIndiv(pls.nutri,  title = 'Figure 1a: PLS on lipid and gene data') 
+
+plotIndiv(pls.nutri,   # plot in joint subspace
+          rep.space = 'XY-variate',
+          title = 'Figure 1b: PLS on nutrimouse lipid and gene data')
+```
+
+<p style="text-align: center;">FIGURE 1: Samples plots from PLS regression on the nutrimouse data to depict the differences between projecting them into individual X and Y spaces, or the averaged XY subspace</p>
+
+
+#### **style**
+
+Due to R containing multiple different plotting packages, the desired package to be used can be set using the `style` parameter. It defaults to using `'ggplot2'`, but `'lattice'` and `'graphics'` can also be used. Figure 2 shows off the differences between each of these styles.
+
+An interactable 3D plot can also be produced by setting `style = 3d`. This requires the `rgl` package to be installed. 
+
+``` {r, fig.show='hold', out.width = '32%'}
+plotIndiv(pls.nutri, rep.space = 'XY-variate', style = 'ggplot2')
+
+plotIndiv(pls.nutri, rep.space = 'XY-variate', style = 'lattice')
+
+plotIndiv(pls.nutri, rep.space = 'XY-variate', style = 'graphics')
+```
+
+<p style="text-align: center;">FIGURE 2: Default plots using the three different 2D plotting packages.</p>
+
+#### **ellipse**
+
+Ellipse-like confidence regions can be plotted around specific sample groups of interest (Murdoch and Chow, 1996). In the unsupervised or regression methods, the argument group must be specified to indicate the samples to be included in each ellipse. In the supervised methods, the samples are assigned by default to the outcome of interest that is specified in the method. Figure 4 shows what these ellipses look like at a 95% confidence level. This level can be set manually using the `ellipse.level` parameter.
+
+``` {r, fig.align = 'center'}
+plotIndiv(pls.nutri, group = nutrimouse$genotype, 
+          rep.space = 'XY-variate', 
+          ellipse = TRUE,  # plot using the ellipses
+          legend = TRUE)
+```
+
+<p style="text-align: center;">FIGURE 3: Sample plot of PLS regression on nutrimouse data to depict the use of the confidence ellipses.</p>
+
+## **plotIndiv()** in Unsupervised Single Omics 
+
+Here, the PCA methodology is used on the `nutrimouse` lipid concentration data to exemplify the use of this function in the context of a single dataframe. From Figure 4, one could look at clustering by genotype or by diet. 
+
+``` {r, fig.align = 'center'}
+pca.lipid <- pca(X, ncomp = 2) # undergo basic PCA
+
+plotIndiv(pca.lipid, group = nutrimouse$diet, # plot samples in PC space
+          pch = nutrimouse$genotype,
+          legend = TRUE, legend.title = 'Diet',
+          legend.title.pch = 'Genotype',
+          title = 'PCA on nutrimouse lipid data')
+```
+
+<p style="text-align: center;">FIGURE 4: Sample plot from PCA on nutrimouse data. This plot can be used for clustering evaluation and to gain a better idea of the general structure of the data.</p>
+
+
+## **plotIndiv()** in Supervised Single Omics 
+
+When dealing with only one predictive dataset in a supervised context, the `plotIndiv()` function can be combined with the `background.predict()` function to provide a meaningful visualisation of how the model has been trained, and how it will generalise to new data points. Figure 5 shows this on the `nutrimouse` dataset, where the lipid concentration data is used as the predictor. 
+
+``` {r, fig.align = "center"}
+Y <- nutrimouse$genotype
+splsda.nutri <- splsda(X, Y, ncomp = 2) # undergo basic sPLS-DA
+
+# calculate the prediction background using the mahalanobis distance metric
+background.mahal <-  background.predict(splsda.nutri,
+                                        comp.predicted = 2,
+                                        dist = 'mahalanobis.dist')
+
+# plot the sample plot
+plotIndiv(splsda.nutri, pch = nutrimouse$genotype,
+          legend = TRUE, legend.title = 'Diet',
+          legend.title.pch = 'Genotype',
+          title = 'sPLS-DA on nutrimouse lipid data',
+          background = background.mahal)
+```
+
+<p style="text-align: center;">FIGURE 5: Sample plot from sPLS-DA on nutrimouse lipid data. Includes a prediction background to show the classes that would be assigned to novel data points given their values on the first two latent components.</p>
+
+
+
+## **plotIndiv()** in Multi-Omics
+
+Unsupervised methods such as CCA or PLS integrate two datasets. This results in pairs of novel components, where one from each pair belongs to each dataset. `plotIndiv()` is useful for understanding the relationship structure between the two datasets. In these scenarios, the subspace (**X**, **Y** or **XY**) in which the samples are to be projected must be selected. Figure 6 hows the samples from the `nutrimouse` dataset projected onto  components from the lipid concentration and genetic expression data. 
+
+``` {r, fig.align = "center"}
+plotIndiv(pls.nutri,  group = nutrimouse$diet,
+          pch = nutrimouse$genotype,
+          legend = TRUE, legend.title = 'Diet',
+          legend.title.pch = 'Genotype',
+          title = 'PLS on lipid and gene data')
+```
+
+<p style="text-align: center;">FIGURE 6: Samples plots of PLS regression on nutrimouse data. These plots could be used to determine the similarities and differences between the two inputted datasets.</p>
+
+
+## **plotIndiv()** in an N-Integration Framework
+
+**DIABLO**, or **multiblock (s)PLS-DA**, also integrate two datasets, but uses their information in order to classify novel samples. Once again, `plotIndiv()` provides information on the relationship between the inputted dataframes, or *blocks*. Figure 7 shows the degree of agreement between the different blocks and the discriminative ability of each data set. This example uses the `breast.TCGA` dataset, as this contains 3 datasets that can be visualised. 
+
+``` {r, fig.align = "center"}
+Y <- nutrimouse$gene # set the Y dataframe to the genetic expression data
+
+# undergo rCCA using the ridge regularisation method
+rcca.res <- rcc(X, Y, ncomp = 3, method = 'ridge', 
+                lambda1 = 0.064, lambda2 = 0.008) 
+
+plotIndiv(rcca.res, group = nutrimouse$genotype, ind.names = FALSE, # plot samples
+          legend = TRUE, title = 'rCCA on nutrimouse data') 
+```
+
+<p style="text-align: center;">FIGURE 7: Sample plots from rCCA on nutrimouse data.</p>
+
+## **plotIndiv()** in P-Integration Framework
+
+Using a P-integrated framework, the independent studies can be plotted individually or all together. The `study` parameter controls this. Including `all.partial` will plot all studies (as can be seen in Figure 8), where as using a specific number (eg. `"2"`) will just plot that study specifically. Figure 8 makes use of a **multigroup sPLS-DA** analysis on the `stemcells` data. 
+
+``` {r, out.width = '80%', fig.align = "center"}
+data(stemcells) # extract stem cells data
+
+mint.res <- mint.splsda(X = stemcells$gene,    # undergo multigroup
+                        Y = stemcells$celltype,# sPLS-DA
+                        ncomp = 2, 
+                        keepX = c(10, 5),
+                        study = stemcells$study) # specify studies to be used
+
+# plot just the second study
+#plotIndiv(mint.res, study = "2")    
+
+# plot study-specific outputs for all studies
+plotIndiv(mint.res, study = "all.partial", legend = TRUE)
+```
+
+<p style="text-align: center;">FIGURE 8: Sample plots from a multigroup sPLS-DA on the stem cells dataset. Projection of samples onto each study's latent components is depicted. This aids in evaluating the similarity between each dataset.</p>
+
+# Case Studies
+
+Refer to the following case studies for a more in depth look at interpreting the output of the `plotIndiv()` function:
+
+- [PCA - Multidrug](http://mixomics.org/case-studies/spca-multidrug-case-study/)
+- [IPCA - Liver Toxicity](http://mixomics.org/case-studies/sipca-liver-toxicity-case-study/)
+- [rCCA - Nutrimouse](http://mixomics.org/rcca-nutrimouse/)
+- [sPLS - Liver Toxicity](http://mixomics.org/case-studies/spls-liver-toxicity/)
+- [sPLS-DA - SRBCT](http://mixomics.org/case-studies/splsda-srbct/)
+- [Multilevel - Vac18](http://mixomics.org/case-studies/multilevel-vac18/)
+
+# References
+
+- 1. [Rohart F, Gautier B, Singh A, Lê Cao K-A (2017b). mixOmics: an R package for 'omics feature selection and multiple data integration.](http://mixomics.org/a-propos/publications/)
+
+- 2. [Rohart F.,  Matigian N., Eslami A., Bougeard S and Lê Cao, K-A (2017a). MINT: A multivariate integrative method to identify reproducible molecular signatures across independent experiments and platforms *BMC Bioinformatics* 18:128.](https://bmcbioinformatics.biomedcentral.com/articles/10.1186/s12859-017-1553-8)
+
+- 3. [Murdoch, D. and Chow, E. (1996). A graphical display of large correlation matrices. The American Statistician, 50(2):178–180.](https://www.jstor.org/stable/2684435)

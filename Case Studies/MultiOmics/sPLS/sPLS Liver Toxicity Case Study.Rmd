@@ -1,0 +1,337 @@
+---
+#title: "sPLS Liver Toxicity Case Study"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, echo= TRUE, warning=FALSE, message=FALSE,
+                      fig.show=TRUE, fig.keep = 'all', out.width = '90%')
+```
+
+
+# Case Study of sPLS with Liver Toxicity dataset
+
+Partial Least Squares (or Projection to Latent Space - PLS) and its sparse variant (sPLS) is a linear, multivariate visualisation technique for integratable datasets. It overcomes the shortcomings of related methods, such as PCA and CCA, in various Omics contexts. In this case study, a PLS2 method will be used. Most of the concepts and procedures explored are applicable in a PLS1 context.
+
+For background information on the (s)PLS method, refer to the [PLS Methods Page](http://mixomics.org/methods/spls/).
+
+This case study will use a PLS2 framework. To read an example of a PLS1 methodology, [click here](https://mixomicsteam.github.io/Activities/pls-liver-case.html#example-pls1-regression).
+
+## Rscript
+
+The R script used for all the analysis in this case study is available [here](http://mixomics.org/wp-content/uploads/2022/01/sPLS-Liver-Toxicity-Case-Study.zip).
+
+## To begin
+
+Load the latest version of mixOmics. Note that the seed is set such that all plots can be reproduced. This should **not** be included in proper use of these functions.
+
+```{r}
+library(mixOmics) # import the mixOmics library
+
+set.seed(5249) # for reproducibility, remove for normal use
+```
+
+### The data
+
+The liver toxicity dataset was generated in a study in which rats were subjected to varying levels of acetaminophen [3].
+
+The `mixOmics` liver toxicity dataset is accessed via `liver.toxicity` and contains the following:
+
+* `liver.toxicity$gene` (continuous matrix): 64 rows and 3116 columns. The expression measure of 3116 genes for the 64 subjects (rats).
+* `liver.toxicity$clinic` (continuous matrix): 64 rows and 10 columns, containing 10 clinical variables for the same 64 subjects.
+* `liver.toxicity$treatment` (continuous/categorical matrix): 64 rows and 4 columns, containing information on the treatment of the 64 subjects, such as doses of acetaminophen and times of necropsy.
+
+To confirm the correct dataframes were extracted, the dimensions of each are checked. 
+
+``` {r}
+data(liver.toxicity) # extract the liver toxicity data
+X <- liver.toxicity$gene # use the gene expression data as the X matrix
+Y <- liver.toxicity$clinic # use the clinical data as the Y matrix
+
+dim(X) # check the dimensions of the X dataframe
+dim(Y) # check the dimensions of the Y dataframe
+```
+
+## Initial Analysis
+
+### Preliminary Analysis with PCA
+
+Both datasets should be explored prior to any form of analysis. This will aid in making decisions in constructing the best model possible. PCA is an unsupervised, exploratory method that is useful here. When using PCA on these datasets, both should be centered and scaled due to the varying scales of each variables (especially the **Y** dataframe). It is preferable to first run a PCA with a large number of components (i.e. `ncomp = 10`). Then, use the ‘elbow’ (a sudden drop) on the barplot to choose the final number of PCs. Further information can be found in the [PCA Methods Page](http://mixomics.org/methods/spca/).
+
+``` {r, out.width = "49%", fig.show = "hold"}
+pca.gene <- pca(X, ncomp = 10, center = TRUE, scale = TRUE)
+pca.clinic <- pca(Y, ncomp = 10, center = TRUE, scale = TRUE)
+
+plot(pca.gene)
+plot(pca.clinic)
+```
+
+<p style="text-align: center;">FIGURE 1: Barplot of the variance each principal component explains of the liver toxicity data.</p>
+
+The explained variance of each Principal Components for both datasets can be seen in Figure 1. In both cases, use of the 'elbow method' indicates two components would be sufficient. Beyond this, the added components provide little novel information. The next step is to assess the clustering of samples in the Principal Component subspace. 
+
+``` {r, out.width = "49%", fig.show = "hold"}
+plotIndiv(pca.gene, comp = c(1, 2), 
+          group = liver.toxicity$treatment[, 4], 
+          ind.names = liver.toxicity$treatment[, 3], 
+          legend = TRUE, title = 'Liver gene, PCA comp 1 - 2')
+
+plotIndiv(pca.clinic, comp = c(1, 2), 
+          group = liver.toxicity$treatment[, 4], 
+          ind.names = liver.toxicity$treatment[, 3], 
+          legend = TRUE, title = 'Liver clinic, PCA comp 1 - 2')
+```
+
+<p style="text-align: center;">FIGURE 2: Preliminary (unsupervised) analysis with PCA on the liver toxicity data</p>
+
+From Figure 2, the samples do not cluster by their dosage or by the time exposure. While this does not provide direct information about the data, it can be inferred that neither of these treatment features are the primary factors in separating different groups of samples. 
+
+## Initial sPLS model
+
+A basic sPLS model needs to be created such that it can be optimised and tuned.Note that as no `keepX` or `keepY` parameters are passed into the function, it is equivalent to the `pls()` function for now. The regression mode of sPLS is used as the gene expression data is being attempting to be used to explain the clinical data. 
+
+``` {r}
+spls.liver <- spls(X = X, Y = Y, ncomp = 5, mode = 'regression')
+```
+
+## Tuning sPLS
+
+### Selecting the number of components
+#### The **ncomp** Parameter
+
+The number of components can be reduced from 10 to a much more appropriate value. As with most other methods in `mixOmics`, this is done through the `perf()` function. Here, a repeated cross-validation procedure it utilised (10 folds, 5 repeats). When using this function on either a `pls` or `spls` object, an appropriate criteria to use for optimisation is the $Q^2$ measure, which has been extended to PLS (Wold, 1982; Tenenhaus, 1998). Others (including the mean squared error of prediction (MSEP) and $R^2$) are acccessable through the resulting object. The $Q^2$ measure is explained in the 'Addition Notes' section below.
+
+``` {r, fig.align = "center"}
+# repeated CV tuning of component count
+perf.spls.liver <- perf(spls.liver, validation = 'Mfold',
+                         folds = 10, nrepeat = 5) 
+ 
+plot(perf.spls.liver, criterion = 'Q2.total')
+```
+
+<p style="text-align: center;">FIGURE 3: Tuning the number of components in PLS on the liver toxicity data. For each component, the repeated cross-validation (5 × 10−fold CV) $Q^2$ score is shown. Horizontal line depicts $Q^2$ = 0.0975. The bars represent the variation of these values across the repeated folds.</p>
+
+The output of the component number tuning can be seen in Figure 3. It contains a horizontal line at $Q^2$ = 0.0975 which indicates the recommended cut off for dimension selection. Components with $Q^2$ values lower than this are unlikely to improve the model. In this example, of the first five latent components, the first alone would be sufficient. Hence, it seems that one latent variate is sufficient. 
+
+### Selecting the number of variables
+#### The **keepX** Parameter
+
+If undergoing the PLS1 method, the Mean Absolute Error (`measure  = 'MAE'`) or Mean Square Error (`measure = 'MSE'`) are appropriate. These can be evaluated through the `tune.spls()` function which implements a cross-validated measure of these metrics.
+
+In a multivariate (PLS2) analysis, MAE or MSE are not appropriate as they do not scale well across multiple response variables. Also, the number of variables from **Y** must be selected. There are two evaluation metrics in the PLS2 context: the correlation (`measure = "cor"`) between predicted and actual components and the residual sum of squares (`measure = "RSS"`) between predicted and actual components. In optimal cases, the former is maximised, while the latter is minimised. Note, RSS gives more weight to large errors and is thus sensitive to outliers. It also intrinsically selects less features on the **Y** dataframe than the correlation measure.
+
+``` {r, fig.align = "center"}
+# set range of test values for number of variables to use from X dataframe
+list.keepX <- c(seq(20, 50, 5))
+# set range of test values for number of variables to use from Y dataframe
+list.keepY <- c(3:10) 
+
+
+tune.spls.liver <- tune.spls(X, Y, ncomp = 2,
+                              test.keepX = list.keepX,
+                              test.keepY = list.keepY,
+                              nrepeat = 1, folds = 10, # use 10 folds
+                              mode = 'regression', measure = 'cor') 
+plot(tune.spls.liver)         # use the correlation measure for tuning
+```
+
+<p style="text-align: center;">FIGURE 4: Tuning plot for sPLS2.</p>
+
+The output of this tuning can be seen in Figure 4. For every grid value of keepX and keepY, the averaged correlation coefficients between the **t** and **u** components (latent variables) are shown across repeated cross validation folds. The value is depicted by circle size. Optimal values (here corresponding to the highest mean correlation) for each dimension and data set are indicated by the green square.
+
+The optimal number of features to use for both datasets can be extracted through the below calls.
+
+``` {r}
+tune.spls.liver$choice.keepX
+tune.spls.liver$choice.keepY
+```
+
+These values will be stored to form the final model.
+
+``` {r}
+# extract optimal number of variables for X dataframe
+optimal.keepX <- tune.spls.liver$choice.keepX 
+
+# extract optimal number of variables for Y datafram
+optimal.keepY <- tune.spls.liver$choice.keepY
+
+optimal.ncomp <-  length(optimal.keepX) # extract optimal number of components
+```
+
+## Final Model
+
+Using the tuned parameters generated above, the final sPLS model can be constructed.
+
+``` {r}
+# use all tuned values from above
+final.spls.liver <- spls(X, Y, ncomp = optimal.ncomp, 
+                    keepX = optimal.keepX,
+                    keepY = optimal.keepY,
+                    mode = "regression") # explanitory approach being used, 
+                                         # hence use regression mode
+```
+
+
+## Plots
+
+### Sample Plots
+
+The `plotIndiv()` outputs in Figure 5 and Figure 6 highlights the patterns in the two data sets (gene and clinical). Individual plots can be displayed on three different subspaces spanned by the: X variates, the Y variates or the mean subspace in which coordinates are averaged from the first two subspaces (Figure 5(a), (b) and Figure 6 respectively). This output shows that the time of necropsy has a larger effect than the quantity of acetaminophen consumed. Compared with individual variable PCA plots above, sPLS differentiates between the low and higher doses of acetaminophen and time of nercropsy on each dimension.
+
+While sPLS is an unsupervised approach and does not take into account the classes of the samples in the model, the graphs below have their samples categorised to better understand the similarities between samples.
+
+``` {r, out.width = "49%", fig.show = "hold"}
+plotIndiv(final.spls.liver, ind.names = FALSE, 
+         rep.space = "X-variate", # plot in X-variate subspace
+         group = liver.toxicity$treatment$Time.Group, # colour by time group
+         pch = as.factor(liver.toxicity$treatment$Dose.Group), 
+         col.per.group = color.mixo(1:4), 
+         legend = TRUE, legend.title = 'Time', legend.title.pch = 'Dose')
+
+plotIndiv(final.spls.liver, ind.names = FALSE,
+         rep.space = "Y-variate", # plot in Y-variate subspace
+         group = liver.toxicity$treatment$Time.Group, # colour by time group
+         pch = as.factor(liver.toxicity$treatment$Dose.Group), 
+         col.per.group = color.mixo(1:4), 
+         legend = TRUE, legend.title = 'Time', legend.title.pch = 'Dose')
+```
+
+<p style="text-align: center;">FIGURE 5: Sample plot for sPLS2 performed on the liver.toxicity data. Samples are projected into the space spanned by the components associated to each data set (or block).</p>
+
+``` {r, fig.align = "center"}
+plotIndiv(final.spls.liver, ind.names = FALSE, 
+         rep.space = "XY-variate", # plot in averaged subspace
+         group = liver.toxicity$treatment$Time.Group, # colour by time group
+         pch = as.factor(liver.toxicity$treatment$Dose.Group), # select symbol
+         col.per.group = color.mixo(1:4),                      # by dose group
+         legend = TRUE, legend.title = 'Time', legend.title.pch = 'Dose')
+```
+
+<p style="text-align: center;">FIGURE 6: Sample plot for sPLS2 performed on the liver.toxicity data. Samples are projected into the space spanned by the averaged components of both datasets.</p>
+
+The plots can also be represented in 3D using `style = '3d'`, as seen in Figure 7.
+
+```{r, eval = FALSE}
+col.tox <- color.mixo(as.numeric(as.factor(liver.toxicity$treatment[, 4]))) # create set of colours
+plotIndiv(final.spls.liver, ind.names = FALSE, 
+          rep.space = "XY-variate", # plot in averaged subspace
+          axes.box = "both", col = col.tox, style = '3d')
+```
+
+<img src="http://mixomics.org/wp-content/uploads/2022/01/sPLS-Liver-Toxicity-Case-Study-3D-Sample-Plot.png" alt="newplot" style="max-width: 80%; display: block; margin: auto;"/>
+
+<p style="text-align: center;">FIGURE 7: 3D sample plot for sPLS2 performed on the liver.toxicity data. Samples are projected into the space spanned by the averaged components of both datasets.</p>
+
+The `plotArrow()` option is useful in this context to visualise the level of agreement between data sets. It can be seen in Figure 8 that specific groups of samples seem to be located far apart from one data set to the other, indicating a potential discrepancy between the information extracted. 
+
+``` {r, fig.align = "center"}
+plotArrow(final.spls.liver, ind.names = FALSE,
+          group = liver.toxicity$treatment$Time.Group, # colour by time group
+          col.per.group = color.mixo(1:4),
+          legend.title = 'Time.Group')
+```
+
+<p style="text-align: center;">FIGURE 8:  Arrow plot from the sPLS2 performed on the liver.toxicity data. The start of the arrow indicates the location of a given sample in the space spanned by the components associated to the gene data set, and the tip of the arrow the location of that same sample in the space spanned by the components associated to the clinical data set.</p>
+
+### Variable Plots
+
+The stability of a given feature is defined as the proportion of cross validation folds (across repeats) where it was selected for to be used for a given component. Stability values (for the **X** component) can be extracted via `perf.spls.liver$features$stability.X`. Figure 9(a) and (b) depict these stabilities as histograms for the first two components respectively. Both components use the same set of features fairly consistently across repeated folds, meaning the variance of the data can be attributed to a specific set of features. The first component displays this quality much more than the second.
+
+``` {r}
+# form new perf() object which utilises the final model
+perf.spls.liver <- perf(final.spls.liver, 
+                          folds = 5, nrepeat = 10, # use repeated cross-validation
+                          validation = "Mfold", 
+                          dist = "max.dist",  # use max.dist measure
+                          progressBar = FALSE)
+
+# plot the stability of each feature for the first two components, 
+# 'h' type refers to histogram
+par(mfrow=c(1,2)) 
+plot(perf.spls.liver$features$stability.X[[1]], type = 'h',
+     ylab = 'Stability',
+     xlab = 'Features',
+     main = '(a) Comp 1', las =2,
+     xlim = c(0, 150))
+plot(perf.spls.liver$features$stability.X$comp2, type = 'h',
+     ylab = 'Stability',
+     xlab = 'Features',
+     main = '(b) Comp 2', las =2,
+     xlim = c(0, 300))
+```
+
+<p style="text-align: center;">FIGURE 9:  Stability of variable selection from the sPLS on the Liver Toxicity gene expression data. The barplot represents the frequency of selection across repeated CV folds for each selected gene for component 1 (a) and 2 (b).</p>
+
+The relationship between the features and components can be explored using a correlation circle plot. This highlights the contributing variables that together explain the covariance between the two datasets. Specific subsets of molecules can be further investigated. Figure 10 shows the correlations between selected genes (names not shown), between selected clinical parameters and the relationship between sets of genes and certain clinical parameters. 
+
+``` {r, fig.align = "center"}
+plotVar(final.spls.liver, cex = c(3,4), var.names = c(FALSE, TRUE))
+```
+
+<p style="text-align: center;">FIGURE 10: Correlation circle plot from the sPLS2 performed on the liver.toxicity data. This plot should be interpreted in relation to Figure 5 to better understand how the expression levels of these molecules may characterise specific sample groups.</p>
+
+A complementary tool to aid in understanding the correlation structure between variables is the Relevance Network plot. Figure 11 shows this network plot. Only the used variables are shown, further selected by the `cutoff` parameter. Rstudio sometimes struggles with the margin size of this plot, hence either launch `X11()` prior to plotting the network, or use the arguments `save` and `name.save` as shown below. 
+
+Two substructures can be observed from this network. First, the small cluster to the top right, where clinical feature `ALB.g.dL` is shown to be negatively correlated with three genetic features and none else. The second substructure includes three clinical features which are (mostly) positively correlated with a large set of genetic features.  
+
+``` {r, eval = FALSE}
+color.edge <- color.GreenRed(50)  # set the colours of the connecting lines
+
+# X11() # To open a new window for Rstudio
+network(final.spls.liver, comp = 1:2,
+        cutoff = 0.7, # only show connections with a correlation above 0.7
+        shape.node = c("rectangle", "circle"),
+        color.node = c("cyan", "pink"),
+        color.edge = color.edge,
+        save = 'png', # save as a png to the current working directory
+        name.save = 'sPLS Liver Toxicity Case Study Network Plot')
+```
+
+<img src="http://mixomics.org/wp-content/uploads/2022/01/sPLS-Liver-Toxicity-Case-Study-Network-Plot.jpg" alt="newplot" style="max-width: 80%; display: block; margin: auto;"/>
+
+<p style="text-align: center;">FIGURE 11:  Network representation from the sPLS2 performed on the liver.toxicity data. The networks are bipartite, where each edge links a gene (rectangle) to a clinical variable (circle) node, according to a similarity matrix. </p>
+
+Another complementary plot used for exploration of feature structure in sPLS is the Cluster Image Map (CIM). The same technique of using the `X11()` function or `save`/`save.name` parameters may be required here too. Figure 12 shows that the clinical variables can be separated into three clusters, each of them either positively or negatively associated with two groups of genes. This is similar to what we have observed in Figure 11. The large red cluster corresponds to the largest substructure in the network while the large blue cluster was not depicted in Figure 11 due to the use of the `cutoff` parameter. 
+
+``` {r, eval = FALSE}
+cim(final.spls.liver, comp = 1:2, xlab = "clinic", ylab = "genes")
+```
+
+<img src="http://mixomics.org/wp-content/uploads/2022/01/sPLS-Liver-Toxicity-Case-Study-CIM.png" alt="newplot" style="max-width: 80%; display: block; margin: auto;"/>
+
+<p style="text-align: center;">FIGURE 12:  Clustered Image Map from the sPLS2 performed on the liver.toxicity data. The plot displays the similarity values between the **X** and **Y** variables selected across two dimensions, and clustered with a complete Euclidean distance method.</p>
+
+### More information on Plots
+
+For a more in depth explanation of how to use and interpret the plots seen, refer to the following pages:
+
+- [`plotIndiv()` - Sample Plot](http://mixomics.org/graphics/sample-plots/plotindiv/)
+- [`plotVar()` - Correlation Circle Plot](http://mixomics.org/graphics/variable-plots/plotvar/)
+- [`network()` - Relevance Network Graph](http://mixomics.org/graphics/variable-plots/network/)
+- [`cim()` - Cluster Image Maps](http://mixomics.org/graphics/variable-plots/cim/)
+
+
+
+## Additional Notes
+
+### $Q^2$ measure
+
+Ultimately, $Q^2$ is a measure of how well a given model can mathematically reproduce the data of the training set. It is closely related to the $R^2$ measure, such that $R^2$ is a measure of "goodness of fit" while $Q^2$ is a measure of "goodness of prediction". It is calculated as such:
+
+$Q^2 = 1 - PRESS / TSS$ where
+
+$PRESS = \sum{(y - \hat{y})^2}$ and
+
+$TSS = \sum{(y - \overline{y})^2}$
+
+## References
+
+
+1. [Tenenhaus M. (1998) La régression PLS: théorie et pratique. Paris: Editions Technic.](https://books.google.com.au/books?hl=en&lr=&id=OesjK2KZhsAC&oi=fnd&pg=PA1&dq=La+r%C3%A9gression+PLS:+th%C3%A9orie+et+pratique&ots=ExOwA65xBI&sig=9x5k7NKS1neJhI86GOfxq4PmW0U#v=onepage&q=La%20r%C3%A9gression%20PLS%3A%20th%C3%A9orie%20et%20pratique&f=false)
+
+2. [Wold, S., Sjöström, M., and Eriksson, L. (2001). Pls-regression: a basic tool of chemometrics. Chemometrics and intelligent laboratory systems, 58(2), 109–130.](https://www.sciencedirect.com/science/article/abs/pii/S0169743901001551)
+
+3. [Bushel, P., Heinloth, A., Li, J., Huang, L., Chou, J., & Boorman, G. et al. (2007). Blood gene expression signatures predict exposure levels. Proceedings Of The National Academy Of Sciences, 104(46), 18211-18216. https://doi.org/10.1073/pnas.0706987104](https://www.pnas.org/content/104/46/18211.short)
+

@@ -1,0 +1,247 @@
+---
+#title: "Case Studies where the methods fail"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, echo= TRUE, warning=FALSE, message=FALSE, 
+                      fig.show=TRUE, fig.keep = 'all', out.width = '90%')
+```
+
+# SRBCT sPLS-DA Case Study, but with permuted class labels
+
+This case study will use the exact same methodology as the [sPLS-DA SRBCT Case Study](http://mixomics.org/case-studies/splsda-srbct-case-study/). However, prior to model construction, the class labels (`srbct$class`) will be randomly permuted. The proportions of each class will be maintained, but the instances they are associated with will be different. This is done to exemplify a case where the distinction between the provided classes is minimal and/or the data are quite noisy.
+
+sPLS-DA is fairly ineffective when looking at classes defined by linear or non-linear relationships. It is effective when the classes cluster according to a set of "signal" features, even in the presence of large quantities of noise attributes [1]. 
+
+``` {r, echo = FALSE}
+library(mixOmics) # import the mixOmics library
+
+data(srbct) # extract the small round bull cell tumour data
+X <- srbct$gene # use the gene expression data as the X matrix
+Y <- srbct$class # use the class data as the Y matrix - NON permuted
+Yp <- sample(srbct$class) # use the class data as the Y matrix - permuted
+```
+
+``` {r, echo = FALSE}
+optimal.ncomp <- 3
+optimal.keepX <- c(9, 260, 30)
+```
+
+Rather than undergoing the entire tuning process again, the optimal values yielded from the [sPLS-DA SRBCT Case Study](http://mixomics.org/case-studies/splsda-srbct-case-study/) will be used here - they can be seen directly below. Using these values, the sPLS-DA model can be constructed.
+
+``` {r}
+optimal.ncomp
+optimal.keepX
+```
+
+``` {r, echo = FALSE}
+final.splsda.normal <- splsda(X, Y, 
+                       ncomp = optimal.ncomp, 
+                       keepX = optimal.keepX)
+
+final.splsda.permuted <- splsda(X, Yp, 
+                       ncomp = optimal.ncomp, 
+                       keepX = optimal.keepX)
+```
+
+## Variable Stability
+
+sPLS-DA is ultimately a feature selection tool - such that variables that best separate the classes will be extracted. Hence, asssessing the stability (frequency of feature selection over cross validated folds) can give an indicator of the performance of said feature selection. 
+
+Below, the number of features with a stability of above 0.4 and the mean stability value of all selected features can be seen. For all three components, both these values were lower in the permuted case compared to the normal case. As this was over 5 folds and 10 repeats, this difference can be assumed to be significant. By permuting the labels, the ability of the model to locate signal features is significantly hindered. More noisy features are interpreted as useful by the model, resulting in lower average stabilities of selected features.
+
+``` {r, echo = FALSE}
+# form new perf() objects which utilises the final models
+perf.splsda.srbct.normal <- perf(final.splsda.normal, 
+                          folds = 5, nrepeat = 10, # use repeated cross-validation
+                          validation = "Mfold", dist = "max.dist",  # use max.dist measure
+                          progressBar = FALSE)
+
+perf.splsda.srbct.permuted <- perf(final.splsda.permuted, 
+                          folds = 5, nrepeat = 10, # use repeated cross-validation
+                          validation = "Mfold", dist = "max.dist",  # use max.dist measure
+                          progressBar = FALSE)
+```
+
+``` {r, echo = FALSE, collapse = TRUE}
+stab.normal.c1 <- length(perf.splsda.srbct.normal$features$stable[[1]][perf.splsda.srbct.normal$features$stable[[1]] > 0.4])
+stab.permuted.c1 <- length(perf.splsda.srbct.permuted$features$stable[[1]][perf.splsda.srbct.permuted$features$stable[[1]] > 0.4])
+
+stab.normal.c2 <- length(perf.splsda.srbct.normal$features$stable[[2]][perf.splsda.srbct.normal$features$stable[[2]] > 0.4])
+stab.permuted.c2 <- length(perf.splsda.srbct.permuted$features$stable[[2]][perf.splsda.srbct.permuted$features$stable[[2]] > 0.4])
+
+stab.normal.c3 <- length(perf.splsda.srbct.normal$features$stable[[3]][perf.splsda.srbct.normal$features$stable[[3]] > 0.4])
+stab.permuted.c3 <- length(perf.splsda.srbct.permuted$features$stable[[3]][perf.splsda.srbct.permuted$features$stable[[3]] > 0.4])
+
+cat("Normal component 1 - Features with high stability: ", stab.normal.c1, "- Mean stability: ", mean(perf.splsda.srbct.normal$features$stable[[1]]))
+cat("Normal component 2 - Features with high stability: ", stab.normal.c2, "- Mean stability: ", mean(perf.splsda.srbct.normal$features$stable[[2]]))
+cat("Normal component 3 - Features with high stability: ", stab.normal.c3, "- Mean stability: ", mean(perf.splsda.srbct.normal$features$stable[[3]]))
+
+cat("Permutted component 1 - Features with high stability: ", stab.permuted.c1, "- Mean stability: ", mean(perf.splsda.srbct.permuted$features$stable[[1]]))
+cat("Permutted component 2 - Features with high stability: ", stab.permuted.c2, "- Mean stability: ", mean(perf.splsda.srbct.permuted$features$stable[[2]]))
+cat("Permutted component 3 - Features with high stability: ", stab.permuted.c3, "- Mean stability: ", mean(perf.splsda.srbct.permuted$features$stable[[3]]))
+```
+
+## Plots
+
+### Sample Plots
+
+First, observe the sample plots found with the [sPLS-DA SRBCT Case Study](http://mixomics.org/case-studies/splsda-srbct-case-study/) - seen in Figure 1. The components are useful discriminators between classes, for instance the first component is best suited to defining the `BL` class from the others. Overall, the classes separate quite well (save for the `NB` and `RMS` classes on the second component).
+
+``` {r, fig.show = "hold", out.width = "49%", echo = FALSE}
+plotIndiv(final.splsda.normal, comp = c(1,2), # plot samples from final model
+          group = srbct$class, ind.names = FALSE, # colour by class label
+          ellipse = TRUE, legend = TRUE, # include 95% confidence ellipse
+          title = ' (a) sPLS-DA on SRBCT, comp 1 & 2')
+
+plotIndiv(final.splsda.normal, comp = c(1,3), # plot samples from final model
+          group = srbct$class, ind.names = FALSE,  # colour by class label
+          ellipse = TRUE, legend = TRUE, # include 95% confidence ellipse
+          title = '(b) sPLS-DA on SRBCT, comp 1 & 3')
+```
+
+
+<p style="text-align: center;">FIGURE 1:  Sample plots from sPLS-DA performed on the SRBCT gene expression data including 95% confidence ellipses. Samples are projected into the space spanned by the first three components. (a) Components 1 and 2 and (b) Components 1 and 3. Samples are coloured by their tumour subtypes.</p>
+
+
+The equivalent plots using the permuted labels can be seen in Figure 2. There is a stark decrease in the quality of separation of classes. Large degrees of overlap are present across all three components. The lack of distinction between the classes is a key indicator of a failure of the sPLS-DA methodology to produce useful components.
+
+``` {r, fig.show = "hold", out.width = "49%", echo = FALSE}
+plotIndiv(final.splsda.permuted, comp = c(1,2), # plot samples from final model
+          group = srbct$class, ind.names = FALSE, # colour by class label
+          ellipse = TRUE, legend = TRUE, # include 95% confidence ellipse
+          title = ' (a) sPLS-DA on SRBCT, comp 1 & 2')
+
+plotIndiv(final.splsda.permuted, comp = c(1,3), # plot samples from final model
+          group = srbct$class, ind.names = FALSE,  # colour by class label
+          ellipse = TRUE, legend = TRUE, # include 95% confidence ellipse
+          title = '(b) sPLS-DA on SRBCT, comp 1 & 3')
+```
+
+<p style="text-align: center;">FIGURE 2:  Sample plots from sPLS-DA performed on the SRBCT gene expression data after class label permutation. Samples are projected into the space spanned by the first three components. (a) Components 1 and 2 and (b) Components 1 and 3.</p>
+
+### Variable Plots
+
+Next, the correlation circle plots will be evaluated. The features of the permuted data seemingly have a lower average, absolute correlation with the sPLS-DA components. The clusters of features are also more dispersed. Separation of these features along the first component is severely reduced. 
+
+In combination, Figures 1 and 3 provide useful insights into what features are associated with specific class labels (ie. features positively correlated with the first component are likely key features in defining the `BL` class). The same inferences cannot be made using the permuted form of this data (Figures 2 and 4). 
+
+``` {r, fig.align = "center", echo = FALSE}
+var.name.short <- substr(srbct$gene.name[, 2], 1, 10) #  simplified gene names
+
+plotVar(final.splsda.normal, comp = c(1,2), var.names = list(var.name.short), 
+        cex = 3) # generate correlation circle plot
+```
+
+<p style="text-align: center;">FIGURE 3: Correlation circle plot representing the genes selected by sPLS-DA performed on the SRBCT gene expression data. Gene names are truncated to the first 10 characters. Only the genes selected by sPLS-DA are shown in components 1 and 2.</p>
+
+``` {r, fig.align = "center", echo = FALSE}
+var.name.short <- substr(srbct$gene.name[, 2], 1, 10) #  simplified gene names
+
+plotVar(final.splsda.permuted, comp = c(1,2), var.names = list(var.name.short), 
+        cex = 3) # generate correlation circle plot
+```
+
+<p style="text-align: center;">FIGURE 4: Correlation circle plot representing the genes selected by sPLS-DA performed on the SRBCT gene expression data after class label permutation. Gene names are truncated to the first 10 characters. Only the genes selected by sPLS-DA are shown in components 1 and 2.</p>
+
+## Prediction Performance
+
+Cross validated error rate is usually the best way to evaluate the performance of a sPLS-DA model [1]. It is the key indicator of when it is appropriate to use this type of model. Other metrics such as precision, recall and the F1 score are also useful indicators, but are secondary to that of the error rate. 
+
+Across 5 folds and 100 repeats, these four performance metrics are shown for each of the classes. 
+
+``` {r, echo = FALSE, collapse = TRUE}
+ProduceAveragedPerfMetrics <- function(X, Y, folds, bootstraps) {
+  metrics <- data.frame(matrix(0, nrow = 4, ncol = length(unique(Y))))
+  colnames(metrics) <- unique(Y)
+  rownames(metrics) <- c("error", "precision", "recall", "f1")
+  
+  for (B in 1:bootstraps) {
+    
+    testingProportion <- floor((1/folds)*nrow(X))
+    notTestedIdx <- 1:nrow(X)
+    
+    for (fold in 1:folds) {
+      test <- sample(notTestedIdx, testingProportion) # randomly select samples in testing
+      train <- setdiff(1:nrow(X), test) # rest is part of the train set
+      
+      # store matrices into training and test set:
+      X.train <- X[train, ]
+      X.test <- X[test,]
+      Y.train <- Y[train]
+      Y.test <- Y[test]
+      
+      train.splsda <- splsda(X.train, Y.train, ncomp = optimal.ncomp, keepX = optimal.keepX)
+      predict.splsda <- predict(train.splsda, X.test, dist = "centroids.dist")
+      
+      preds <- predict.splsda$class$centroids.dist[,optimal.ncomp]
+      conf.matrix <- table(factor(preds, levels = levels(Y)), Y.test)
+      
+      for (class in unique(Y)) {
+        
+        class = as.character(class)
+        df <- data.frame(conf.matrix)
+        
+        tp <- conf.matrix[class, class]
+        
+        tn.df <- df[which(as.character(df$Var1)!=class),]
+        tn.df <- tn.df[which(as.character(tn.df$Y.test)!=class),]
+        tn <- sum(tn.df$Freq)
+        
+        fn.df <- df[which(as.character(df$Y.test) == class), ]
+        fn.df <- fn.df[which(as.character(fn.df$Var1) != class),]
+        fn <- sum(fn.df$Freq)
+        
+        fp.df <- df[which(as.character(df$Var1) == class), ]
+        fp.df <- fp.df[which(as.character(fp.df$Y.test) != class),]
+        fp <- sum(fp.df$Freq)
+        
+        error <- (fp+fn)/(tp+tn+fp+fn)
+        precision <- tp/(tp+fp)
+        recall <- tp/(tp+fn)
+        f1 <- (2*precision*recall)/(precision+recall)
+        
+        if (is.na(precision)) {
+          precision = 0
+        }
+        if (is.na(recall)) {
+          recall = 0
+        }
+        if (is.na(f1)) {
+          f1 = 0
+        }
+        
+        
+        metrics[,class] <- metrics[,class] + c(error/folds, precision/folds, recall/folds, f1/folds)
+      }
+      
+      notTestedIdx <- setdiff(notTestedIdx, test)
+    }
+    
+    
+  }
+  
+  metrics["error",] <- metrics["error",]/bootstraps
+  metrics["precision",] <- metrics["precision",]/bootstraps
+  metrics["recall",] <- metrics["recall",]/bootstraps
+  metrics["f1",] <- metrics["f1",]/bootstraps
+  return(metrics)
+}
+
+normal.metrics <- ProduceAveragedPerfMetrics(X, Y, 5, 100)
+permuted.metrics <- ProduceAveragedPerfMetrics(X, Yp, 5, 100)
+
+print("Normal model performance metrics")
+normal.metrics
+
+print("Permuted model performance metrics")
+permuted.metrics
+```
+
+It is clear that in the permuted case, all these metrics worsen (ie. error increases; precision, recall and F1 decrease). In the normal case, there is a set of signal features, each of which are involved in defining one or more classes from the remaining classes. By permuting the labels, the samples which allowed the model to determine which features were associated with defining a specific class are no longer part of that class. This mimics data that has few signal features, representing the case where sPLS-DA becomes an ineffective classifier and feature selection tool.
+
+# References
+
+- 1. [Ruiz-Perez, D., Guan, H., Madhivanan, P. et al. So you think you can PLS-DA?. BMC Bioinformatics 21, 2 (2020). https://doi.org/10.1186/s12859-019-3310-7](https://bmcbioinformatics.biomedcentral.com/articles/10.1186/s12859-019-3310-7)

@@ -1,0 +1,92 @@
+---
+#title: "PLS Discriminant Analysis (PLS-DA)"
+#author: "KA Le Cao, Xin-Yi Chua"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, 
+                      echo = TRUE, 
+                      warning = FALSE, 
+                      message = FALSE, 
+                      fig.show = TRUE, 
+                      fig.keep = 'all', 
+                      fig.align = "center",
+                      out.width = "70%") 
+```
+
+# Quick Start
+
+```{r}
+library(mixOmics) # import the mixOmics library
+data(srbct) # extract the small round bull cell tumour data
+X <- srbct$gene # use the gene expression data as the X matrix
+Y <- srbct$class # use the class data as the Y matrix
+```
+
+### PLS-DA
+
+``` {r, eval = FALSE}
+result.plsda.srbct <- plsda(X, Y) # run the method
+plotIndiv(result.plsda.srbct) # plot the samples
+plotVar(result.plsda.srbct) # plot the variables
+```
+
+`?plsda` can be run to determine the default arguments of this function:
+
+* Number of Components (`ncomp = 2`): The first two PLS-DA components are calculated,
+* Scaling of data (`scale = TRUE`): Each data set is scaled (each variable has a variance of 1 to enable easier comparison) - data is internally centered.
+
+
+### sPLS-DA
+
+``` {r, eval = FALSE}
+splsda.result <- splsda(X, Y, keepX = c(50,30)) # run the method
+plotIndiv(splsda.result) # plot the samples
+plotVar(splsda.result) # plot the variables
+
+# extract the variables used to construct the first latent component
+selectVar(splsda.result, comp = 1)$name 
+# depict weight assigned to each of these variables
+plotLoadings(splsda.result, method = 'mean', contrib = 'max')  
+```
+
+`?splsda` can be run to determine the default arguments of this function:
+
+* If `keepx` is not supplied, this function will be equivalent to the `plsda()` function as all variables will be used.
+* Uses the same defaults for `ncomp` and `scale` as the `plsda()` function. 
+
+
+
+# PLS Discriminant Analysis
+
+PLS was designed with a canonical (exploratory) approach and a regression (explanatory) approach in mind. Partial Least Squares - Discriminant Analysis (PLS-DA) was hence developed to allow the powerful PLS algorithm to be used for classification [1, 2]. It performs very similarly to PLS, just that the response vector **y** contains categorical vectors rather than continuous vectors. PLS-DA has the same advantages that PLS does, such that it operates efficiently over large dataframes and is not negatively influenced by collinearity. 
+
+# Sparse PLS Discriminant Analysis
+
+The sparse variant (sPLS-DA) enables the selection of the most predictive or discriminative features in the data to classify the samples [3]. sPLS-DA performs variable selection and classification in a one-step procedure. It is a special case of sparse PLS, where the lasso penalisation applies only on the loading vector associated to the **X** data set. 
+
+
+# Principles of (s)PLS-DA
+
+While PLS was designed for regression and exploratory purposes, it can be applied in classification contexts. Internally, the **y** vector is converted to a dummy block matrix, **Y**, (ie. 'one hot encoded') of size $N * K$, where $N$ is the number of samples and $K$ is the number of classes. The standard PLS regression algorithm then operates on this new dataframe. Classification uses the projection of the data onto the components yielded by PLS which are defined by their corresponding loading vectors. Refer to the [Distance Metrics](http://mixomics.org/methods/distance-metrics/) page for more information on how classifications are actually made.
+
+The implementation of PLS-DA functions equivalently on large datasets and better on smaller datasets when compared to equivalent classification methods, such as Linear (Fisher's) Discriminant Analysis [4]. This is especially true in multiclass cases (more than 2 classes) as the PLS-DA model does not require the construction of various 2-class submodels.
+
+When evaluating the classification performance of (s)PLS-DA models, repeated cross-validation is used. Generally, 5 or 10 folds and 50-100 repeats is appropriate. As overfitting is always a risk when undergoing classification, these repeats are used to ensure that feature selection is occurring optimally. 
+
+
+## Case study
+See [Case Study: sPLS-DA SRBCT](http://mixomics.org/case-studies/splsda-srbct-case-study/) for more details and plotting options.
+
+## References
+
+1. [Pérez-Enciso, M. and Tenenhaus, M., 2003. Prediction of clinical outcome with microarray data: a partial least squares discriminant analysis (PLS-DA) approach. Human genetics, 112(5-6), pp.581-592.](http://link.springer.com/article/10.1007/s00439-003-0921-9/fulltext.html)
+
+2. [Nguyen, D.V. and Rocke, D.M., 2002. Tumor classification by partial least squares using microarray gene expression data. Bioinformatics, 18(1), pp.39-50.](https://bmcbioinformatics.biomedcentral.com/articles/10.1186/1471-2105-12-253)
+
+3. [Lê Cao, K.A., Boitard, S. and Besse, P., 2011. Sparse PLS discriminant analysis: biologically relevant feature selection and graphical displays for multiclass problems. BMC bioinformatics, 12(1), p.253](https://bmcbioinformatics.biomedcentral.com/articles/10.1186/1471-2105-12-253)
+
+4. [FISHER, R. (1936). THE USE OF MULTIPLE MEASUREMENTS IN TAXONOMIC PROBLEMS. Annals Of Eugenics, 7(2), 179-188. https://doi.org/10.1111/j.1469-1809.1936.tb02137.x](https://onlinelibrary.wiley.com/doi/10.1111/j.1469-1809.1936.tb02137.x)

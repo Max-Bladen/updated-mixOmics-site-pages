@@ -1,0 +1,28 @@
+---
+#title: "sample_plots_main"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, 
+                      echo = TRUE, 
+                      warning = FALSE, 
+                      message = FALSE, 
+                      fig.show = TRUE, 
+                      fig.keep = 'all', 
+                      fig.align = "center",
+                      out.width = "70%") 
+```
+
+# Sample plots
+
+## Overview
+
+`mixOmics` can display several types of fully customizable sample plots. These plots are independent of the statistical methods used to analyze the data and can process any results provided to them. The following plots are used to visualise individual samples within a given dataset.
+
+[`plotIndiv()` - Sample Plot](http://mixomics.org/graphics/sample-plot/plotindiv/) – this function yields a plot where the samples are represented as points placed according to their projection on to the selected latent components of the data. Such points tend to aggregate together when they are share similarities. This function is appropriate for use for all methods within `mixOmics`.
+
+[`plotArrow()` - Arrow Plot](http://mixomics.org/graphics/sample-plot/plotarrow/) – this function produces a plot to represent paired coordinates as arrows, with the sample being represented by the location of the the 'tip' and 'tail'. This can show the similarity between points from different datasets, with short arrows depicting strong agreement and long arrows depicting strong disagreement between datasets. Hence, this function is appropriate for use in any N-integration framework. 
+

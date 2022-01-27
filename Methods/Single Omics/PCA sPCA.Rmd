@@ -1,0 +1,95 @@
+---
+#title: "Principal Component Analysis (PCA)"
+author: "KA Le Cao, Sebastien Dejean, Xin-Yi Chua, Danielle Davenport"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, 
+                      echo = TRUE, 
+                      warning = FALSE, 
+                      message = FALSE, 
+                      fig.show = TRUE, 
+                      fig.keep = 'all', 
+                      fig.align = "center",
+                      out.width = "70%") 
+```
+
+# Quick Start
+
+```{r}
+library(mixOmics)
+data(multidrug) # call data set in the package
+X <- multidrug$ABC.trans # load gene expression data into a matrix
+```
+
+### PCA
+
+``` {r, eval = FALSE}
+result.pca.multi <- pca(X)   # run the method
+plotIndiv(result.pca.multi)  # plot the samples
+plotVar(result.pca.multi)    # plot the variables
+```
+
+`?pca` can be run to determine the default arguments of this function:
+
+* Number of components (`ncomp = 2`): Only the first two Principal Components are calculated.
+* Centering (`center = TRUE`): The data is centered, such that all variables have a mean = 0.
+* Scaling (`scale = FALSE`): The data is not scaled. If set to `TRUE`, all variables will be standardised to have unit variance.
+
+### sPCA
+
+``` {r, eval = FALSE}
+result.spca.multi <- spca(X, keepX = c(50, 30))  # run the method
+plotIndiv(result.spca.multi)  # plot the samples
+plotVar(result.spca.multi)    # plot the variables
+
+# extract the variables used to construct the first PC
+selectVar(result.spca.multi, comp = 1)$name 
+# depict weight assigned to each of these variables
+plotLoadings(result.spca.multi, method = 'mean', contrib = 'max') 
+```
+
+`?spca` can be run to determine the default arguments of this function:
+
+* Number of included variables (`keepX =  rep(ncol(X), ncomp)`): By default, this parameter will use all variables to compute the selected number of Principal Components.
+* Uses the same defaults for `ncomp` and`center` as the `pca()` function. In this case, the `scale` parameter is set to `TRUE` by default.
+
+
+# Principal Component Analysis (PCA)
+
+Principal Component Analysis [1] is primarily used for the exploration and identification of the largest sources of variation within omics datasets. The aim of PCA is to reduce the dimensionality of the inputted data, while retaining as much information as possible, to allow for visualisation. PCA is a mathematical procedure that constructs novel, orthogonal axes which are linear combinations of the original axes. These new axes are the Principal Components (PCs). PCs are then ordered and selected based on the proportion of variance that each explains. Hence, the first PC will always capture the most variance from the original data, with each subsequent PC capturing less than the one before it. 
+
+# Sparse Principal Component Analysis (sPCA)
+
+sPCA [2] is based on singular value decomposition and is appropriate for dealing with large data sets where not all variables are likely to be equally important. As implemented in `mixOmics`, 'sparsity' is achieved via LASSO penalisation, such that PCs are no longer a linear combination of all original variables - just a subset containing the 'best' (information rich) variables. sPCA can be used to investigate whether 'tighter' sample clusters can be obtained as redundant and non-discriminatory variables are not included.
+
+# Principles of (s)PCA
+
+This is an unsupervised, exploratory method which seeks to reduce the dimensionality of the data whilst retaining as much of the original information as possible. Principal components (PC) are yielded, where are linear combinations of the original dataset's features. The weight of each feature in contributing to a given PC is defined by that PC's corresponding loading vector.
+
+The data is projected onto the PCs using the loading vectors to determine their new position in the PC spanned subspace. PCs are calculated to maximise the captured variance - meaning the as PCs are produced, each explains less variance than the one before. 
+
+### The (s)PCA Methods
+
+The original dataset can be reconstructed by multiplying the matrix of Principal components with the 'loading vectors' - the weights assigned to the variables. 
+
+In `mixOmics`, (s)PCA is numerically solved in two ways (both are embedded within `pca()` and `spca()`):
+
+**1.** Singular value decomposition (SVD) of the data matrix. This is the most computationally efficient method and is also adopted by most software (including the R function `prcomp` within the `stat` package). SVD is suitable for data containing no missing values.
+
+**2.** In the case of missing values, Non-linear Iterative Partial Least Squares (NIPALS) can be utilised. This method is less efficient but more robust and accurate. See [Methods: Missing values](http://mixomics.org/methods/missing-values/).
+
+
+
+# Case study
+
+For a more in depth breakdown of the functionality and usage of these functions, refer to [Case Study: PCA Multidrug](http://mixomics.org/case-studies/spca-multidrug-case-study/).
+
+# References
+
+1. [Jolliffe I.T. (2002) Principal Component Analysis. Springer Series in Statistics, Springer, New York.](http://tocs.ulb.tu-darmstadt.de/182444961.pdf)
+
+2. [Shen, H. and Huang, J. Z. (2008). Sparse principal component analysis via regularized low rank matrix approximation. 99(6), 1015–1034.](http://www.sciencedirect.com/science/article/pii/S0047259X07000887)

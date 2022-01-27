@@ -1,0 +1,75 @@
+---
+title: "Index"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(RWordPress)
+library(XML)
+library(RCurl)
+library(knitr)
+## functon to upload images
+#opts_knit$set(upload.fun = imgur_upload, base.url = NULL) 
+```
+
+```{r}
+# username = 'password'
+options(WordpressURL = c('http://mixomics.org/xmlrpc.php'))
+options(WordpressLogin = c( "maxbladen" = "1Cg^ZOTlLJJoYAR(J@Obv!kf" )) 
+
+# note: you may have to play around with the following options 'http://mixomics.org/xmlrpc.php' (http, not https)
+```
+
+```{r}
+# current page
+knit2wp(input = 'Case Studies/Cases where the methods fail/SRBCT sPLS-DA Case Study (Permuted Labels).Rmd', 
+        title = 'SRBCT sPLS-DA Case Study (Permuted Labels)',  
+        shortcode = FALSE, publish = TRUE, action = c("newPage"))
+```
+
+GUIDELINES: the new files will be sent to drafts on wordpress
+
+1 - go to the updated page in Pages/drafts, preview, then 'quick edit' then 'publish'
+
+2 - trash the existing file in Pages/Published
+
+3 - in Pages/published, then 'quick edit' then choose parent page (probably not super useful) 
+
+  3.5 - Go to Appearance/Menus and adjust position there
+
+4 - Go to Appearance/Menu, add the new page to menu (will be append at the bottom) then reorganise the tab then 'save menu'
+
+5 - check on website
+
+
+# LIST OF STUFF TO CHANGE:
+
+<img src="" alt="newplot" style="max-width: 80%; display: block; margin: auto;"/>
+
+<p style="text-align: center;"></p>
+
+fig.align = "center",
+
+
+
+
+
+**List of potential errors / things to check:**
+
+- if SSL error, check the credentials, as it could be WordpressURL = 'http://mixomics.org/xmlrpc.php OR 'http://mixomics.org/xmlrpc.php' (http, not https) (for example Al is https, and KA is http)
+
+- if Bad Request (HTTP 400) or time out, keep trying. The server is just not responding
+
+- text in comment in the Rmd text (it is ok in the code)
+
+- Headings very similar to the title. Remove any first heading in the document
+
+- check references weblinks: maybe too long
+
+- for CIM / networks, put out.width='30%' in the chunk

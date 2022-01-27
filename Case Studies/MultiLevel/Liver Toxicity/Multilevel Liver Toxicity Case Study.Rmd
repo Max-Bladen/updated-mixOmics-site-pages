@@ -1,0 +1,168 @@
+---
+#title: "Multilevel Liver Toxicity Case Study"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, echo= TRUE, warning=FALSE, message=FALSE,
+                      fig.show=TRUE, fig.keep = 'all', out.width = '90%')
+```
+
+
+# Case Study of Multilevel sPLS with Liver Toxicity dataset
+
+sPLS is a linear, multivariate method in order to explore the relationship between two datasets while picking the features which are the most useful. Here, the functionality of the multilevel approach is exemplified. There is significant overlap between the method used here and that used in the other [sPLS Case Study](http://mixomics.org/case-studies/spls-liver-toxicity/) on this same dataset. Hence, things like the preliminary exploration and model tuning will be omitted here.
+
+For background information on the (s)PLS method, refer to the [PLS Methods Page](http://mixomics.org/methods/spls/).
+
+## Rscript
+
+The R script used for all the analysis in this case study is available [here](http://mixomics.org/wp-content/uploads/2022/01/Multilevel-Liver-Toxicity-Case-Study.zip).
+
+## To begin
+
+Load the latest version of mixOmics. Note that the seed is set such that all plots can be reproduced. This should **not** be included in proper use of these functions.
+
+```{r}
+library(mixOmics) # import the mixOmics library
+
+set.seed(5249) # for reproducibility, remove for normal use
+```
+
+### The data
+
+The liver toxicity dataset was generated in a study in which rats were subjected to varying levels of acetaminophen [1]. For this case study, there will be an artificial repeated measures design imposed onto this data (despite it not being drawn from a repeated measures study). 
+
+The `mixOmics` liver toxicity dataset is accessed via `liver.toxicity` and contains the following:
+
+* `liver.toxicity$gene` (continuous matrix): 64 rows and 3116 columns. The expression measure of 3116 genes for the 64 subjects (rats).
+* `liver.toxicity$clinic` (continuous matrix): 64 rows and 10 columns, containing 10 clinical variables for the same 64 subjects.
+* `liver.toxicity$treatment` (continuous/categorical matrix): 64 rows and 4 columns, containing information on the treatment of the 64 subjects, such as doses of acetaminophen and times of necropsy.
+
+To confirm the correct dataframes were extracted, the dimensions of each are checked. 
+
+``` {r}
+data(liver.toxicity) # extract the liver toxicity data
+X <- liver.toxicity$gene # use the gene expression data as the X matrix
+Y <- liver.toxicity$clinic # use the clinical data as the Y matrix
+
+dim(X) # check the dimensions of the X dataframe
+dim(Y) # check the dimensions of the Y dataframe
+```
+
+As mentioned above, a repeated measures framework will be imposed here. Below, the artificial subject feature is generated, such that a total of 16 fake subjects were each sampled 4 times:
+
+``` {r}
+# generate fake subject feature to mimic a repeated measures design
+repeat.indiv <- c(1, 2, 1, 2, 1, 2, 1, 2, 3, 3, 4, 3, 4, 3, 4, 4, 5, 6, 5, 5,
+                  6, 5, 6, 7, 7, 8, 6, 7, 8, 7, 8, 8, 9, 10, 9, 10, 11, 9, 9,
+                  10, 11, 12, 12, 10, 11, 12, 11, 12, 13, 14, 13, 14, 13, 14,
+                  13, 14, 15, 16, 15, 16, 15, 16, 15, 16)
+
+design <- data.frame(sample = repeat.indiv) # load this into a dataframe
+
+summary(as.factor(repeat.indiv)) # 16 rats, 4 measurements each
+```
+
+## The final sPLS model
+
+``` {r, echo = FALSE, eval = FALSE}
+list.keepX <- c(seq(20, 50, 5)) 
+list.keepY <- c(3:10)
+
+# undergo the tuning process to determine the optimal number of variables
+# calculate for first 10 components, use balanced error rate of dist measure
+tune.spls.liver <- tune.splslevel(X, Y, ncomp = 2, 
+                                  multilevel = design,
+                                  test.keepX = list.keepX,
+                                  test.keepY = list.keepY,
+                                  mode = "canonical",
+                                  already.tested.X = 20,
+                                  already.tested.Y = 5) 
+
+#dist = 'max.dist', # use max.dist measure 
+# measure = "BER"
+
+splsTuning <- list(ncomp = 2,
+                   keepX = c(20, 50),
+                   keepY = c(5, 10))
+
+save(splsTuning, file = "splsTuning.RData")
+``` 
+
+``` {r, echo = FALSE}
+load("splsTuning.RData")
+optimal.ncomp <- splsTuning$ncomp
+optimal.keepX <- splsTuning$keepX
+optimal.keepY <- splsTuning$keepY
+```
+
+Below, the tuned `ncomp`, `keepX` and `keepY` are shown. Note that these were generated via the use of the `tune.splslevel()` function rather than just `tune.spls()` as the parameter `multilevel` can be used to account for bias introduced by the repeated measures. Using these parameters, a sPLS model can be constructed. This tuning was done externally. The tuning output can be downloaded [here](http://mixomics.org/wp-content/uploads/2022/01/Multilevel-Liver-Toxicity-Tuning.zip). 
+
+``` {r}
+optimal.ncomp # optimal number of components
+optimal.keepX # optimal number of features to use for each component for X 
+optimal.keepY # optimal number of features to use for each component for Y
+
+spls.liver.multilevel <- spls(X, Y, # generate a tuned sPLS model
+                              multilevel = design,
+                              ncomp = optimal.ncomp,
+                              keepX = optimal.keepX, 
+                              keepY = optimal.keepY,
+                              mode = 'canonical')
+```
+
+
+## Plots
+
+### Sample Plots
+
+This multilevel sPLS model can now be visualised. The projection of the samples onto the averaged **X-Y** components can be seen in Figure 1. In this hypothetical repeated measures experiment, the groups (exposure time) partially separated across the first two sPLS components. For instance, the 48 hour group tended to be associated with the positive end of the second component compared to the other three groups. 
+
+``` {r, fig.align = "center"}
+# project onto averaged components, use time as colour, use dosage as symbol
+plotIndiv(spls.liver.multilevel, rep.space = "XY", 
+          group = liver.toxicity$treatment$Time.Group, 
+          pch = as.factor(liver.toxicity$treatment$Dose.Group),
+          col.per.group = color.mixo(1:4), 
+          legend = TRUE, legend.title = 'Time', legend.title.pch = 'Dose')
+```
+
+<p style="text-align: center;">FIGURE 1: Sample plot for sPLS2 performed on the liver.toxicity data after controlling for repeated measures. Samples are projected into the space spanned by the averaged components of both datasets.</p>
+
+### Variable Plots
+
+As always, the correlation circle plot is a key indicator of the relationships between the selected features, across both datasets. The two primary clusters seen in Figure 2 (negative component 1 and positive component 2) are quite tight and numerous. The features in the latter of these two are likely the key variables in the defining the 48 hour exposure group.
+
+``` {r, fig.align = "center"}
+plotVar(spls.liver.multilevel, 
+        var.names = TRUE, 
+        cex = c(2,2))
+```
+
+<p style="text-align: center;">FIGURE 2: Correlation circle plot from the sPLS2 performed on the liver.toxicity data after controlling for repeated measures.</p>
+
+``` {r, eval = FALSE}
+cim(spls.liver.multilevel)
+```
+
+The last visualisation that is used is the clustered image map (CIM). This plot complements the correlation circle plot nicely. For instance, the `cholesterol.mg.dL` feature (last column in the CIM) has a small group of features it is strongly positively correlated with, a larger block of strong, negative correlations and the rest are fairly weak associations. This feature can be found (in orange) on the right side (positive component 1) of Figure 2. 
+
+
+<img src="http://mixomics.org/wp-content/uploads/2022/01/Multilevel-Liver-Toxicity-CIM.png" alt="newplot" style="max-width: 80%; display: block; margin: auto;"/>
+
+<p style="text-align: center;">FIGURE 3: Clustered Image Map from the sPLS2 performed on the liver.toxicity data after controlling for repeated measures. The plot displays the similarity values between the **X** and **Y** variables selected across two dimensions, and clustered with a complete Euclidean distance method.</p>
+
+### More information on Plots
+
+For a more in depth explanation of how to use and interpret the plots seen, refer to the following pages:
+
+- [`plotIndiv()` - Sample Plot](http://mixomics.org/graphics/sample-plots/plotindiv/)
+- [`cim()` - Cluster Image Maps](http://mixomics.org/graphics/variable-plots/cim/)
+
+
+## References
+
+1. [Bushel, P., Heinloth, A., Li, J., Huang, L., Chou, J., & Boorman, G. et al. (2007). Blood gene expression signatures predict exposure levels. Proceedings Of The National Academy Of Sciences, 104(46), 18211-18216. https://doi.org/10.1073/pnas.0706987104](https://www.pnas.org/content/104/46/18211.short)

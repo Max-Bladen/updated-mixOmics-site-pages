@@ -1,0 +1,68 @@
+---
+#title: "N-IntegrationMethods"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, 
+                      echo = TRUE, 
+                      warning = FALSE, 
+                      message = FALSE, 
+                      fig.show = TRUE, 
+                      fig.keep = 'all', 
+                      fig.align = "center",
+                      out.width = "70%") 
+```
+
+# N-Integration Methods
+
+When studying omics data, it is common to have more than two datasets measured over the same samples. For instance, the miRNA, mRNA and protein expresssion levels may have been taken for each individual within the study (as in the `breast.TCGA` dataset). The methods featured in the 'Single Omics' and 'Multi omics' sections cannot address all three datasets at the same time. 
+
+A generalised form of [PLS](http://mixomics.org/methods/spls/) (and its supervised counterpart, [PLS-DA](http://mixomics.org/methods/spls-da/)) is utilised within the `mixOmics` package to achieve N-integration - integration of two or more datasets that are measured across the same $N$ samples. The aim is to identify correlated variables across these datasets, and in a supervised analysis, to explain the categorical outcome. 
+
+`mixOmics` features multiblock PLS as the unsupervised approach and multiblock PLS-DA (referred to as DIABLO) as the supervised method. Both these techniques have sparse variants as in many omics contexts feature selection is important. All these methods extend the generalised Canonical Correlation Analysis (gCCA) [1] and sparse gCCA [2] from the `RGCCA` package to this integrative framework.
+
+It is strongly advised that prior to the use of any N-integrative method, users begin individual and pairwise analyses of their data using the standard forms of these methods (i.e. (s)PLS). This will provide useful insight into the structure and major sources of variation within the data and will guide the more complex decisions required when extending into N-integrative methods.
+
+
+## Constructing the *design* matrix
+
+When undergoing any method within `mixOmics`, the user should be considering the biological question under inspection. This is especially true when using the N-integrative framework, such that the 'design' of the model can be specified. 'Design' refers to the relationship structure between the various inputted dataframes. As a functional parameter, this is a matrix, where each value (between 0-1) represents the strength of the relationship to be modeled between two given dataframes. For the `breast.TCGA` data which contains three dataframes:
+
+``` {r}
+design = matrix(1, ncol = 3, nrow = 3, 
+                dimnames = list(c("mirna", "mrna", "protein"), 
+                                c("mirna", "mrna", "protein")))
+diag(design) = 0
+design
+```
+
+This is the default matrix that is used, as can be specified by setting `design = "full"`. Similarly, setting `design = "null"` will produce a matrix full of zeroes. Note that the diagonal is all set to zeroes so that the relationship of a dataset to itself is not considered.
+
+Inputting `design = 0.5` will produce the following matrix, and works for any value between 0 and 1:
+
+``` {r, echo = FALSE}
+design = matrix(0.5, ncol = 3, nrow = 3, # make 3x3 matrix with all 0.5
+                dimnames = list(c("mirna", "mrna", "protein"), c("mirna", "mrna", "protein"))) # set names to that of inputted dataframes
+diag(design) = 0 # ensure relationship of a dataframe to itself is no considered
+design # show the design matrix
+```
+
+In multiblock (s)PLS, if `Y` is provided instead of `indY`, the `design` matrix needs to be adjusted to include the relationship of each `X` dataset with `Y`. 
+
+# Methods and Case Studies
+
+Below are links to the relevant pages detailing the methodology and usage of the functions:
+
+* [Multiblock (s)PLS Method](http://mixomics.org/methods/multiblock-spls/)
+* [Multiblock (s)PLS-DA (DIABLO) Method](http://mixomics.org/mixdiablo/)
+* [DIABLO TCGA Case Study](http://mixomics.org/mixdiablo/diablo-tcga-case-study/)
+
+
+# References
+
+1. [Tenenhaus A and Tenenhaus M. Regularized generalized canonical correlation analysis. Psychometrika, 76(2):257–284, 2011.](https://link.springer.com/article/10.1007%2Fs11336-011-9206-8)
+
+2. [Tenenhaus A, Philippe C, Guillemot V, Lê Cao, K. A., Grill J, and Frouin V. Variable selection for generalized canonical correlation analysis. Biostatistics, page kxu001, 2014.](https://academic.oup.com/biostatistics/article/15/3/569/224062)
