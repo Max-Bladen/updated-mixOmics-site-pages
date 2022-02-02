@@ -23,15 +23,15 @@ library(knitr)
 ```{r}
 # username = 'password'
 options(WordpressURL = c('http://mixomics.org/xmlrpc.php'))
-options(WordpressLogin = c( "maxbladen" = "1Cg^ZOTlLJJoYAR(J@Obv!kf" )) 
+options(WordpressLogin = c( "maxbladen" = "" )) 
 
 # note: you may have to play around with the following options 'http://mixomics.org/xmlrpc.php' (http, not https)
 ```
 
 ```{r}
 # current page
-knit2wp(input = 'MINT/Stem Cells Case Study/MINT Stem cells Case Study.Rmd', 
-        title = 'MINT Stem Cells Case Study',  
+knit2wp(input = '.Rmd', 
+        title = '',  
         shortcode = FALSE, publish = TRUE, action = c("newPage"))
 ```
 
