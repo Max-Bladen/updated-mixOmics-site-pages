@@ -1,0 +1,105 @@
+---
+#title: "Not sure yet"
+output: html_document
+---
+
+```{r global_options, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, 
+                      echo= TRUE, 
+                      warning=FALSE, 
+                      message=FALSE, 
+                      fig.show=TRUE, 
+                      fig.keep = 'all',
+                      out.width = "70%")
+```
+
+# Single Cell Gastrulation Multiblock sPLS Case Study, but with inappropriate data
+
+This case study will use a very similar methodology to that found in the [Multiblock sPLS Gastrulation Case Study](http://mixomics.org/case-studies/multiblock-spls-gastrulation-case-study/). However, for this version of the vignette, all five dataframes found within the single cell data will be considered. 
+
+The aim here is to raise awareness to cases where the various datasets being considered by the model are inappropriate and/or poorly integrated with one another.
+
+``` {r, echo = FALSE}
+library(mixOmics) # import the mixOmics library
+
+load('Data/nmt_data_processed.RData') # load the gastrulation data
+
+X1 <- data$rna # select the five dataframes to explore
+X2 <- data$met_genebody
+X3 <- data$acc_genebody
+X4 <- data$met_promoter
+X5 <- data$acc_promoter
+
+# compile these into a single X object
+X <- list(rna = X1, met.gene = X2, acc.gene = X3,
+          met.pro = X4, acc.pro = X5)
+```
+
+For simplicity's sake, a basic design matrix will be used, such that the relationship coefficient between each dataset will be `0.5` (refer [here](http://mixomics.org/methods/n-integration-methods/) for more information). Also, the arbitrarily selected `keepX` value of 50 will be used for each of the 3 components across each dataset. 
+
+```{r, echo = FALSE}
+# for square matrix filled with 0.5s
+design = matrix(0.5, ncol = length(X), nrow = length(X), 
+                dimnames = list(names(X), names(X)))
+diag(design) = 0 # set diagonal to 0s
+
+choice.ncomp <- 3 
+choice.keepX <- list(rna = rep(50, 3), # 50 features per each component 
+                     met.gene = rep(50, 3), 
+                     acc.gene = rep(50, 3),
+                     met.pro = rep(50, 3), 
+                     acc.pro = rep(50, 3))
+```
+
+``` {r, echo = FALSE}
+final.mbspls.model = block.spls(X, indY = 1,  
+                                ncomp = choice.ncomp, 
+                                keepX = choice.keepX,
+                                design = design)
+```
+
+Plotting the sample projections can provide insight into the quality of the model. Looking at Figure 1 (the same plot seen in [Multiblock sPLS Gastrulation Case Study](http://mixomics.org/case-studies/multiblock-spls-gastrulation-case-study/)), it seems that there is moderate separation of some of the lineage classes. However, when plotting the samples from the two accessibility dataframes (Figures 2 and 3), it is clear that the multiblock sPLS method has failed to produce useful components for this data.
+
+Observe the projection of the `endoderm` samples within Figure 1 compared to Figure 3. In the former, the second latent component (and the first to a lesser extent) is able to separate this class from the others. While this is a unsupervised method, this represents components which are useful. In the latter however, they are almost randomly scattered amongst the other classes. This goes to show the lack of a correlated signal for this class across the two datasets. This concept can be extended to the other classes as similar behavior is observed.
+
+The sPLS (and multiblock variant) method seeks to maximise the covariance between the components of each dataset. It seems to have been unsuccessful in this case.
+
+``` {r, out.width = "90%", fig.align = "center", echo = FALSE}
+plotIndiv(final.mbspls.model, ind.names = FALSE,
+          group = as.factor(cell_metadata$lineage), 
+          pch = as.factor(cell_metadata$stage),
+          col.per.group = color.mixo(1:8), 
+          legend = TRUE, legend.title = 'Lineage', legend.title.pch = 'Stage',
+          blocks = 1)
+
+
+```
+
+<p style="text-align: center;">FIGURE 1: Sample plot for sPLS2 performed on the gastrulation data. Samples are projected into the space spanned by the components yielded from the RNA dataset.</p>
+
+``` {r, out.width = "90%", fig.align = "center", echo = FALSE}
+plotIndiv(final.mbspls.model, ind.names = FALSE,
+          group = as.factor(cell_metadata$lineage), 
+          pch = as.factor(cell_metadata$stage),
+          col.per.group = color.mixo(1:8), 
+          legend = TRUE, legend.title = 'Lineage', legend.title.pch = 'Stage',
+          blocks = 3)
+```
+
+<p style="text-align: center;">FIGURE 2: Sample plot for sPLS2 performed on the gastrulation data. Samples are projected into the space spanned by the components yielded from the gene body accessibility dataset.</p>
+
+``` {r, out.width = "90%", fig.align = "center", echo = FALSE}
+plotIndiv(final.mbspls.model, ind.names = FALSE,
+          group = as.factor(cell_metadata$lineage), 
+          pch = as.factor(cell_metadata$stage),
+          col.per.group = color.mixo(1:8), 
+          legend = TRUE, legend.title = 'Lineage', legend.title.pch = 'Stage',
+          blocks = 5)
+```
+
+<p style="text-align: center;">FIGURE 3: Sample plot for sPLS2 performed on the gastrulation data. Samples are projected into the space spanned by the components yielded from the promoter accessibility dataset.</p>
+
+These figures go to show the importance of inspecting each and every plot produced by the methods within the `mixOmics` package - especially when integrating multiple datasets. Here, the model has attempted to yield components with high degrees of covariance and in doing so has produced very useless components.  
+
+In this scenario, it would be recommended to rerun the analysis with fewer datasets. An even better starting point would be to use the basic `spls()` method across the data in a pairwise manner rather than the `block.spls()` method. 

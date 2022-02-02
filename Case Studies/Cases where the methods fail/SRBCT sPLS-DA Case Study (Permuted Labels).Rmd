@@ -75,13 +75,29 @@ stab.permuted.c2 <- length(perf.splsda.srbct.permuted$features$stable[[2]][perf.
 stab.normal.c3 <- length(perf.splsda.srbct.normal$features$stable[[3]][perf.splsda.srbct.normal$features$stable[[3]] > 0.4])
 stab.permuted.c3 <- length(perf.splsda.srbct.permuted$features$stable[[3]][perf.splsda.srbct.permuted$features$stable[[3]] > 0.4])
 
-cat("Normal component 1 - Features with high stability: ", stab.normal.c1, "- Mean stability: ", mean(perf.splsda.srbct.normal$features$stable[[1]]))
-cat("Normal component 2 - Features with high stability: ", stab.normal.c2, "- Mean stability: ", mean(perf.splsda.srbct.normal$features$stable[[2]]))
-cat("Normal component 3 - Features with high stability: ", stab.normal.c3, "- Mean stability: ", mean(perf.splsda.srbct.normal$features$stable[[3]]))
+print("Normal component 1")
+cat(" - Features with high stability: ", stab.normal.c1)
+cat(" - Mean stability: ", mean(perf.splsda.srbct.normal$features$stable[[1]]))
 
-cat("Permutted component 1 - Features with high stability: ", stab.permuted.c1, "- Mean stability: ", mean(perf.splsda.srbct.permuted$features$stable[[1]]))
-cat("Permutted component 2 - Features with high stability: ", stab.permuted.c2, "- Mean stability: ", mean(perf.splsda.srbct.permuted$features$stable[[2]]))
-cat("Permutted component 3 - Features with high stability: ", stab.permuted.c3, "- Mean stability: ", mean(perf.splsda.srbct.permuted$features$stable[[3]]))
+print("Normal component 2")
+cat(" - Features with high stability: ", stab.normal.c2)
+cat(" - Mean stability: ", mean(perf.splsda.srbct.normal$features$stable[[2]]))
+
+print("Normal component 3")
+cat(" - Features with high stability: ", stab.normal.c3)
+cat(" - Mean stability: ", mean(perf.splsda.srbct.normal$features$stable[[3]]))
+
+print("Permutted component 1")
+cat(" - Features with high stability: ", stab.permuted.c1)
+cat(" - Mean stability: ", mean(perf.splsda.srbct.permuted$features$stable[[1]]))
+
+print("Permutted component 2")
+cat(" - Features with high stability: ", stab.permuted.c2)
+cat(" - Mean stability: ", mean(perf.splsda.srbct.permuted$features$stable[[2]]))
+
+print("Permutted component 3")
+cat(" - Features with high stability: ", stab.permuted.c3)
+cat(" - Mean stability: ", mean(perf.splsda.srbct.permuted$features$stable[[3]]))
 ```
 
 ## Plots

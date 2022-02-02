@@ -10,6 +10,8 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r}
+setwd("C:/Users/Work/Desktop/UpdatedMixOmicsPages/All Pages")
+
 library(RWordPress)
 library(XML)
 library(RCurl)
@@ -21,15 +23,15 @@ library(knitr)
 ```{r}
 # username = 'password'
 options(WordpressURL = c('http://mixomics.org/xmlrpc.php'))
-options(WordpressLogin = c( "" = "" )) 
+options(WordpressLogin = c( "maxbladen" = "1Cg^ZOTlLJJoYAR(J@Obv!kf" )) 
 
 # note: you may have to play around with the following options 'http://mixomics.org/xmlrpc.php' (http, not https)
 ```
 
 ```{r}
 # current page
-knit2wp(input = 'Case Studies/Cases where the methods fail/SRBCT sPLS-DA Case Study (Permuted Labels).Rmd', 
-        title = 'SRBCT sPLS-DA Case Study (Permuted Labels)',  
+knit2wp(input = 'MINT/Stem Cells Case Study/MINT Stem cells Case Study.Rmd', 
+        title = 'MINT Stem Cells Case Study',  
         shortcode = FALSE, publish = TRUE, action = c("newPage"))
 ```
 

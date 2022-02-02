@@ -1,0 +1,436 @@
+---
+#title: "MINT Microbial Case Study"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(dpi = 100, 
+                      echo= TRUE, 
+                      warning=FALSE, 
+                      message=FALSE, 
+                      fig.show=TRUE, 
+                      fig.keep = 'all',
+                      out.width = "90%")
+```
+
+# MINT Microbial Case Study
+
+This case study will focus on applying the P-integrative framework (MINT) to a set of microbial data, derived from two different studies. The ultimate goal is to generate a sPLS-DA model which can determine what inhibiting agent a given microbiome inhabitant has been affected by based on signals present in OTU (**O**perational **T**axonomic **U**nit) readings.   
+
+# Rscript
+
+The R script used for all the analysis in this case study is available [here](http://mixomics.org/wp-content/uploads/2022/02/MINT-Microbial-Case-Study.zip).
+
+# To begin
+
+Load the latest version of `mixOmics`.
+
+``` {r}
+library(mixOmics) # import the mixOmics library
+```
+
+## The data
+
+The data being used in the case study derives from anaerobic respiration inhibition research. There are a total of two studies included in this data [1, 2], measured across the same set of OTUs. They were compiled and analysed in conjunction [3]. Certain microbiome inhabitants can have their anaerobic respiration inhibited by the presence of certain substrates. These studies focused on the impact of phenol and ammonia on this process. 
+
+Download the data [here](https://gitlab.irstea.fr/olivier.chapleur/mint-bioindicators/-/tree/master/Bioindicators%20phenol-ammonia). The `mint_phenol_ammonia.RData` file contains the following dataframes:
+
+- `metadata` (continuous and categotical matrix): 81 rows and 37 columns. Contains much of the metadata for each of the samples. For this case study, only variables used from this dataframe is the `experiment` feature (denotes which study each sample is drawn from) and `inhib_inoc` feature (denotes the type of inhibition for that sample).
+- `abundance` (continuous matrix): 83 rows and 81 columns. Contains the raw OTU (rows) values for each of the samples (columns) across both studies.
+- `taxo` (categorical matrix): 85 rows and 15 columns. Contains taxonomic classification of each OTU. _Not relevant for this case study_.
+- `heatmap` (categorical vector): 83 rows and 1 column. Used by the accompanying document to draw the heatmap. _Not relevant for this case study_. 
+
+``` {r}
+load("Microbial Data/mint_phenol_ammonia.RData") # load the data
+
+treatment <- metadata$inhib_inoc # extract the Y vector, the type of inoculant
+study = metadata$experiment # extract the study each sample is from
+```
+
+## Pre-processing the data
+
+While this case study is not using the mixMC framework, the concepts from [MixMC Pre-processing](http://mixomics.org/mixmc-methodology/mixmc-preprocessing/) are still valid as the data is microbial in nature. Hence, the same steps outlined in that page will be followed here.
+
+### Undergo TSS Normalisation
+
+First step is to convert from the raw OTU counts to a proportional count of each OTU (relative abundances) via the application of a TSS (**T**otal **S**um **S**caling) normalisation. Also note the transposition of the abundance dataframe as the OTU's need to be in the columns, not rows.
+
+``` {r}
+TSS.divide = function(x){ # function to apply a TSS transformation to the data
+ x/sum(x)
+}
+
+# convert from raw to compositional data as well as transpose abundance so
+# that OTUs are columns 
+t.abundance <- apply(t(abundance), 1, TSS.divide)
+```
+
+### Apply an offset
+
+Microbial data is usually quite sparse (many zeroes) which is a problem when undergoing the centered log ratio. Therefore, the next step involves accounting for all the zeroes by adding a small value to all OTU counts. An offset of 0.01 is applied rather than 1 (as seen in [MixMC Pre-processing](http://mixomics.org/mixmc-methodology/mixmc-preprocessing/)) due to the TSS normalisation. An offset of 1 is appropriate when dealing with the raw OTU data.
+
+``` {r}
+abundance.offset <- t.abundance + 0.01 # apply offset
+
+# can see there is a lot of zeroes
+cat("Number of zeroes prior to offset: ", length(which(t.abundance==0))) 
+
+cat("Number of zeroes after offset: ", length(which(abundance.offset==0)))
+```
+
+### Pre-filtering
+
+After the offset is applied, any OTU's with significantly low counts should be removed to avoid any spurious conclusions. After filtering, there is the same number of OTUs as before. It can be assumed that this filtering was done prior to uploading of the data due to the low OTU count to begin with. 
+
+``` {r}
+# function to remove any OTUs which has a count lower than cutoff % of the total
+low.count.removal <- function(data, cutoff=0.01) {
+  
+    # find which OTUs (rows) have counts above cutoff% of the total
+    keep.otu = which(rowSums(data)*100/(
+      sum(rowSums(data))) > 0.01)
+    
+    data.filter = data[keep.otu,] # filter out those with lower than cutoff %
+    return(list(data.filter = data.filter, keep.otu = keep.otu))
+}
+
+result.filter <- low.count.removal(abundance.offset, cutoff=0.01)
+abundance.filter <- result.filter$data.filter
+
+cat("Number of OTU's prior to filtering: ", nrow(abundance.offset))
+cat("Number of OTU's remaining after filtering: ", nrow(abundance.filter))
+```
+
+### CLR Transformation
+
+The final step of pre-processing involves a centered log-ratio transformation of the data. As `mint.splsda()` does not contain the `logratio` parameter, this will be done externally using the `logratio.transfo()` function. 
+
+``` {r}
+# apply the clr transformation, offset = 0 as this was done above
+# note that the abundance dataframe was transposed for the last time, leaving 
+# the OTUs in the columns
+abundance.processed <- logratio.transfo(t(abundance.filter),
+                                  logratio = 'CLR', offset = 0)
+
+class(abundance.processed) <- "matrix" # convert from clr object to matrix
+abundance.processed <- data.frame(abundance.processed) # then convert to df
+```
+
+## Data exploration
+
+Now that the data is processed, it is ready for analysis. As with all other case studies on the site, prior to diving into analysis with the method believed to be the most appropriate, exploring the data with simpler methods can save much time down the track. Hence, the data will go through a PCA and a standard sPLS-DA before the MINT framework is applied.
+
+### PCA
+
+Looking at the projection of the samples in the PC space (Figure 1), the samples from study 1 and study 2 are linearly separable. This is a clear example of an experimental effect - a bias in the data where the distribution differences across studies outweighs the distribution differences between classes. This is exactly what needs to be controlled by the MINT methodology. Figure 1 also indicates that the ammonia treated samples are usually more distinct compared to the other two groups, especially in the case of study 2. However, the significant overlap of the confidence ellipses indicates that a much better model can be developed. 
+
+``` {r, fig.align = "center"}
+# undergo PCA
+ab.pca <- pca(abundance.processed, scale = TRUE, center = TRUE, ncomp = 5)
+
+# plot projection of samples in PC space
+plotIndiv(ab.pca, group=treatment, 
+          ind.names = F,legend=T,
+          pch = as.numeric(factor(study))+15,
+          pch.levels=(study), ellipse = TRUE, 
+          title="PCA",legend.title = "Inhibitor", 
+          legend.title.pch = "Experiment", size.legend = rel(2.4),
+          size.legend.title = rel(2.5))
+```
+
+<p style="text-align: center;">FIGURE 1: Projection of the samples from studies 1 and 2 onto the first two principal components.</p>
+
+## Tuned sPLS-DA Model
+
+Next, a basic sPLS-DA model will be tuned and evaluated. This will aid in showing off the advantages that the MINT framework has on P-integrative datasets over the equivalent, non-integrative methodologies.
+
+A visualisation of the tuning process can be seen in Figure 2. In reality, the `test.keepX` should be iterated on (ie. further tuning done with a higher resolution `test.keepX`), but for the sake of this analysis, just multiples of five were tested. The fairly equal standard distributions of each test shows the consistency of the model across multiple folds and repeats.
+
+``` {r, eval = FALSE}
+# undergo repeated CV tuning, using the maximum distance metric
+ab.splsda.tuning <- tune.splsda(abundance.processed, treatment,
+                                ncomp = 5, test.keepX = seq(5,80, 5),
+                                validation = c('Mfold'), dist = 'max.dist', 
+                                folds = 5, nrepeat = 10)
+
+# To reduce run time, the tuning object is saved externally and loaded in 
+#save(ab.splsda.tuning, file="Microbial Data/ab_splsda_tuning.RData")
+```
+
+``` {r, echo = FALSE}
+load("Microbial Data/ab_splsda_tuning.RData")
+```
+
+``` {r, fig.align = "center"}
+plot(ab.splsda.tuning) # plot the tuning
+```
+
+<p style="text-align: center;">FIGURE 2: Tuning of the basic sPLS-DA function over 5 components. The aim is to minimise the balanced error rate (y-axis) of the model. The diamonds indicate the optimal number of features to use for each component (x-axis).</p>
+
+``` {r}
+# extract the tuned ncomp and keepX parameters
+optimal.ncomp <- ab.splsda.tuning$choice.ncomp$ncomp
+optimal.keepX <- ab.splsda.tuning$choice.keepX[1:optimal.ncomp]
+```
+
+The inclusion of the second component improves the performance of the model considerably. The third, fourth and fifth components do little in improving the model beyond this, but do lower the error rate. The optimal number of components, along with the optimal number of features per component, are printed directly below:
+
+``` {r}
+optimal.ncomp 
+optimal.keepX
+```
+
+Using these values, a standard, tuned sPLS-DA model can be generated. Figure 3 depicts the projection of the samples onto the sPLS-DA components, including the 95% confidence ellipses. This model does a significantly better job at separating the inhibitor classes, reducing their overlap with one another. The impact of the experimental effect within each class is also reduced, but still present. 
+
+``` {r, fig.align = "center"}
+# generate sPLS-DA model using tuned parameters
+ab.splsda.tuned <- splsda(abundance.processed, treatment, scale = TRUE, 
+                    ncomp = optimal.ncomp, keepX = optimal.keepX)
+
+# plot projection of samples onto the sPLS-DA components
+plotIndiv(ab.splsda.tuned,  
+          ind.names = F,legend=T,
+          pch = as.numeric(factor(study))+15,
+          pch.levels=(study), ellipse = TRUE,
+          title="sPLS-DA",legend.title = "Inhibitor", 
+          legend.title.pch = "Experiment", 
+          size.legend = rel(2.4), size.legend.title = rel(2.5))
+```
+
+<p style="text-align: center;">FIGURE 3: Projection of the samples from studies 1 and 2 onto the first two  components yielded by the tuned sPLS-DA. 95% confidence ellipses are included. </p>
+
+### Predictive Performance of sPLS-DA Model
+
+Just looking at the sample projections is not enough to evaluate a supervised model. Below are the standard and balanced error rates (across the three distance metrics) for models using each value up to the optimal number of components. Similar to what was seen in Figure 2, the addition of the second component improves the model significantly (for all metrics), with further component additions enhancing predictive power less and less. In this case, the standard error rate would be appropriate to use as the treatment groups are already fairly balanced.
+
+``` {r}
+# asssess the performance of the model
+splsda_perf = perf(ab.splsda.tuned, validation = 'Mfold', 
+                   folds = 5, nrepeat = 20,
+                   progressBar = FALSE)
+
+splsda_perf$error.rate # print the error rate
+```
+
+## MINT sPLS-DA Model
+
+Now that the data have been adequately explored, and the experimental effect identified, the next step involves the use of the MINT framework. 
+
+### Tuning
+
+While tuned parameters have already been generated, the model that the MINT sPLS-DA will fit will be different to that of the standard sPLS-DA. Hence, the `tune()` method will be used to produce the optimal values. Note the absence of the `validation`, `folds` and `nrepeat` parameters. When using `method = "mint.splsda"` (which internally calls the `tune.mint.splsda()` function), Leave-One-Out cross validation is automatically used. Due to this, `nrepeat = 1` by default, meaning there is no error rate standard deviation produced. This results in an inability to use the `plot()` function on the resulting output (as was done above). 
+
+``` {r, eval = FALSE}
+# tune the ncomp and keepX parameters for the MINT sPLS-DA model
+ab.mint.splsda.tuning <- tune(method = "mint.splsda",
+                              X=abundance.processed, 
+                              treatment,
+                              study = study,
+                              ncomp = 5,
+                              test.keepX = seq(5,80, 5),
+                              measure = 'BER', # balanced error rate
+                              dist = "centroids.dist")
+
+# To reduce run time, the tuning object is saved externally and loaded in 
+#save(ab.mint.splsda.tuning, file="Microbial Data/ab_mint_splsda_tuning.RData")
+```
+
+``` {r, echo = FALSE}
+load("Microbial Data/ab_mint_splsda_tuning.RData")
+```
+
+The optimal values for `ncomp` and `keepX` are extracted and printed below.
+
+``` {r}
+# this determines the indices of the lowest error rate and extracts the 
+# second dimension which corresponds to the optimal component number 
+optimal.ncomp <- which(ab.mint.splsda.tuning$error.rate == 
+                         min(ab.mint.splsda.tuning$error.rate),
+                       arr.ind = TRUE)[2]
+
+# extract the optimal keepX parameter
+optimal.keepX <- ab.mint.splsda.tuning$choice.keepX[1:optimal.ncomp]
+
+optimal.ncomp
+optimal.keepX
+```
+
+### Final model
+
+A MINT sPLS-DA model can then be formed using these tuned parameters.
+
+``` {r}
+# form tuned MINT sPLS-DA model
+ab.mint.splsda <- mint.splsda(X = abundance.processed, Y = treatment,
+                              ncomp = optimal.ncomp, keepX = optimal.keepX,
+                              study = study)
+```
+
+## Plots
+### Sample Plots
+
+As always, the plot to start with is the sample projection plot. Figure 4(a) depicts the projection of the samples onto the 'global' variates, that which represent both studies. Here, the experimental effect is still slightly present, but its impacts within each class have been severly reduced. When comparing this to Figure 3, the Ammonia treated samples are separated from the other groups much better. The overlap between the phenol and placebo groups is also reduced, but not nullified. This may suggest that phenol has a lower degree of impact on the anaerobic respiration of these microorganisms when compared to ammonia. 
+
+The samples projected onto 'partial' variates (those for each study) can be seen in Figure 4(b). Fairly similar conclusions can be drawn, such that the ammonia samples are best separated compared to the other two groups, which have minor degrees of overlap. The homogeneity across all plots in Figure 4 show the effectiveness of the MINT framework in reducing experimental impacts.
+
+``` {r, fig.show = "hold", out.width = "49%"}
+plotIndiv(ab.mint.splsda, ind.names = F,legend=T,
+          pch = as.numeric(factor(study))+15,
+          pch.levels=study,
+          subtitle="Figure 4(a)",legend.title = "Inhibitor",
+          legend.title.pch = "Experiment", 
+          size.legend = rel(0.8))
+
+plotIndiv(ab.mint.splsda, study = "all.partial",
+          ind.names = F,legend=T,
+          pch = as.numeric(factor(study))+15, pch.levels=study,
+          title = "Figure 4(b)", subtitle = paste("Study",1:2), 
+          size.legend = rel(0.8),legend.title = "Inhibitor")
+```
+
+<p style="text-align: center;">FIGURE 4: Projection of the samples from both studies onto the global (a) and study specific (b) variates yielded by MINT sPLS-DA.</p>
+
+### Variable Plots
+
+Understanding how the model has constructed the variates is an important step in learning how these classes are distinct. When considering global component 1 (Figure 5(a)), the association of each variable with a specific class is clear. Positively contributing features are exclusively associated with the `ammonia` class while all negatively contributing features defined the `no inhibition` group. This suggests that the first component (in the global space) is key in discriminating between these two classes. 
+
+While the loading plots in Figure 5(b) are not ordered as in 5(a), being able to observe the difference in loading values across the studies is very useful. Features such as `OTU_26` can be interpreted as potential sources of the experimental effect. There is a large difference between the loading value for this feature across the two studies. Also, the placebo group had the higher median in the first study whereas the `phenol` group had the higher median in the second study. `OTU_170` and `OTU_21` have similar properties across the studies. In contrast, features like `OTU_6` can be seen as strong discriminating factors due to the consistency of their loading values.
+
+``` {r, fig.show = "hold", out.width = "49%"}
+plotLoadings(ab.mint.splsda, method = "median", comp = 1, 
+             legend = T, study = "global", contrib = "max",
+             title = "(a) All Studies, Comp 1")
+
+plotLoadings(ab.mint.splsda, method = "median", comp = 1, 
+             legend = F, study = "all.partial", contrib = "max",
+             title = "(b) Individual Studies, Comp 1", 
+             subtitle = c("Study 1", "Study 2"))
+```
+
+<p style="text-align: center;">FIGURE 5: OTU loading values on the first component in the global (a) and individual study (b) spaces. Bars coloured based on the treatment class with the highest median on that variable.</p>
+
+While the first component defines the distinction between the `no inhibition` and `ammonia` classes, the second component does the same for the `no inhibition` and `phenol` groups. This becomes even more clear when interpreting Figures 5 and 6 in conjunction with Figures 4 and 7.
+
+``` {r, fig.align = "center"}
+plotLoadings(ab.mint.splsda, method = "median", comp = 2, 
+             legend = T, study = "global", contrib = "max",
+             title = "All Studies, Comp 2")
+```
+
+<p style="text-align: center;">FIGURE 6: OTU loading values on the second component in the global space. Bars coloured based on the treatment class with the highest median on that variable.</p>
+
+The correlation circle plot (Figure 7) supports the interpretations made above. Each of the three clusters are roughly associated with one of the classes. On top of this, the tightness of each of these clusters can be evaluated. The feature cluster on the positive side of the first component is much more dense and tight than that of the negative end. Hence, the features which define the `ammonia` group are more homogeneous than those associated with the `no inhibition` class. A possible interpretation of this would be that the removal of a `no inhibition` defining feature would degrade the classification ability of the model more than the removal of an `ammonia` defining feature would. 
+
+``` {r, fig.align = "center"}
+plotVar(ab.mint.splsda, var.names = FALSE,
+        pch = 16)
+```
+
+<p style="text-align: center;">FIGURE 7: Correlation circle plot representing the OTUs selected by MINT sPLS-DA performed on the microbial data to examine the association of the selected OTUs on the first two components.</p>
+
+The below CIM visualises the filtered and transformed abundance data across all the selected OTUs. There are a few 'blocks' of homogeneous abundance counts. For instance, the `ammonia` group has (on average) high abundances for those OTUs in the right-most cluster. The clustering of the rows shows the usefulness of the MINT framework. All the samples belonging to the same class were clustered together, irrespective of what study they were drawn from. This 'perfect' class clustering is not achieved by the standard sPLS-DA model. 
+
+``` {r, echo = FALSE}
+cim(ab.mint.splsda, 
+    row.sideColors = cbind(color.mixo(as.numeric(treatment)),
+                           color.mixo(as.numeric(study)+4)),
+    
+    legend = list(legend = cbind(c(levels(treatment)), c(levels(study))), 
+                col = cbind(c(color.mixo(1:3)), c(color.mixo(5:6))),
+                title = "Treatment and Study", cex = 0.8),
+    
+    save = 'jpeg', name.save = 'MINT Microbial CIM')
+```
+
+``` {r, eval = FALSE}
+cim(ab.mint.splsda, 
+    row.sideColors = cbind(color.mixo(as.numeric(treatment)), color.mixo(as.numeric(study)+4)),
+    
+    legend = list(legend = cbind(c(levels(treatment)), c(levels(study))), 
+                col = cbind(c(color.mixo(1:3)), c(color.mixo(5:6))),
+                title = "Treatment and Study", cex = 0.8)
+    )
+```
+
+<img src="http://mixomics.org/wp-content/uploads/2022/02/MINT-Microbial-CIM.jpeg" alt="newplot" style="max-width: 80%; display: block; margin: auto;"/>
+
+<p style="text-align: center;">FIGURE 8: Clustered Image Map of the OTUs selected by MINT sPLS-DA on the microbial data using all three components. A hierarchical clustering based on the counts of the selected OTUs was used, with samples in rows coloured according to the inoculation method.</p>
+
+Lastly, the relevance network plot can be used to further understand the relationship between variables and classes. Note that `cutoff = 0.6`, such that any correlations below this value are not displayed at all. The `phenol` class has OTUs which are associated with that class alone. This is interesting as the consistent overlap with the `no inhibition` class (eg. Figure 3, 4) might have suggested that these would have some OTU's which are strongly associated with both classes. However, observing Figure 7 and 8, the distinction between the OTUs used to define each of these classes is clear. `OUT_6`, `OUT_125` and `OUT_96` have opposing associations with the `ammonia` and `no inhibition`. This is unsurprising due to their presence as highly contributing features to the first component (Figure 5(a)) - the component which discriminates between these two groups.
+
+``` {r, echo = FALSE}
+network(ab.mint.splsda, cutoff = 0.6,
+        color.node = c(color.mixo(1), color.mixo(2)), 
+        shape.node = c("rectangle", "circle"),
+        save = 'jpeg', name.save = 'MINT Microbial Network')
+```
+
+``` {r, eval = FALSE}
+network(ab.mint.splsda, cutoff = 0.6,
+        color.node = c(color.mixo(1), color.mixo(2)), 
+        shape.node = c("rectangle", "circle"))
+```
+
+<img src="http://mixomics.org/wp-content/uploads/2022/02/MINT-Microbial-Network.jpeg" alt="newplot" style="max-width: 80%; display: block; margin: auto;"/>
+
+<p style="text-align: center;">FIGURE 9: Relevance network of the genes selected by MINT sPLS-DA performed on the microbial OTU data.</p>
+
+## Predictive Performance of MINT sPLS-DA Model
+
+After the model has been explored, it's performance as a classifier is to be assessed. Here, the `perf()` function is used to determine which distance metric will be most appropriate to use. Based on Figure 10, classification error rate is minimised using `max.dist`. This will be used going forward. The three classes are nearly exactly balanced, resulting in the standard and balanced error rates being almost identical.
+
+``` {r, fig.align = "center"}
+ab.mint.splsda.perf <- perf(ab.mint.splsda, folds = 5, nrepeat = 10)
+plot(ab.mint.splsda.perf)
+```
+
+<p style="text-align: center;">FIGURE 10: Classification error rate of the MINT sPLS-DA models, using up to three components for all three distance metrics.</p>
+
+While not a direct measure of predictive performance, AUROC plots can provide insight into the model's strengths and weaknesses. As seen in Figure 11, the `phenol` class was the most difficult for the model to classify with one component. The addition of the second component provides the greatest boost to the predictive ability of all three classes. When a third component was added, the specificity and sensitivity was maximised, primarily in relation
+to the `no inhibition` class.
+
+When comparing the AUROC plots for each study separately, the contributions of each study to the model's predictive ability can be seen. A model using just study 1 samples (Figure 12(a)) was better at classifying `phenol` and `ammonia` classes (vs. others), while a model using study 2 samples was better at predicting the placebo group from the others. 
+
+``` {r, eval = FALSE}
+auroc(ab.mint.splsda, roc.comp = 1, print = FALSE)
+auroc(ab.mint.splsda, roc.comp = 2, print = FALSE)
+auroc(ab.mint.splsda, roc.comp = 3, print = FALSE)
+```
+
+<img src="http://mixomics.org/wp-content/uploads/2022/02/MINT-Microbial-AUROCs.png" alt="newplot" style="max-width: 100%; display: block; margin: auto;"/>
+
+<p style="text-align: center;">FIGURE 11: ROC curve and AUC from the MINT sPLS-DA performed on the microbial OTU data, averaged across one-vs-all comparisons. Each plot depict the iterative addition of sPLS-DA components. Numerical outputs on right are the AUC values for the model using all **three** components.</p>
+
+``` {r, fig.show = "hold", out.width = "49%"}
+auroc(ab.mint.splsda, roc.comp = 1, roc.study = "Study 1", 
+      print = FALSE, title = "(a) Study 1 AUROC")
+auroc(ab.mint.splsda, roc.comp = 1, roc.study = "Study 2", 
+      print = FALSE, title = "(b) Study 2 AUROC")
+```
+
+<p style="text-align: center;">FIGURE 12: ROC curve and AUC from the MINT sPLS-DA performed on the microbial OTU data, using just one component. Plots are specific to study 1 (a) and study 2 (b).</p>
+
+### Testing model on an external set
+
+Currently waiting for access to novel data. Once this is available, this section will be updated. 
+
+# More information on Plots
+
+For a more in depth explanation of how to use and interpret the plots seen, refer to the following pages:
+
+- [`plotIndiv()` - Sample Plot](http://mixomics.org/graphics/sample-plots/plotindiv/)
+- [`plotLoadings()` - Loadings Plot](http://mixomics.org/graphics/plotloadings/)
+- [`plotVar()` - Correlation Circle Plot](http://mixomics.org/graphics/variable-plots/plotvar/)
+- [`cim()` - Cluster Image Maps](http://mixomics.org/graphics/variable-plots/cim/)
+- [`network()` - Relevance Network Graph](http://mixomics.org/graphics/variable-plots/network/)
+
+# References
+
+- 1. [Poirier S. and Chapleur O. Influence of support media supplementation to reduce the inhibition of anaerobic
+digestion by phenol and ammonia: Effect on degradation performances and microbial dynamics. Data in
+Brief. 2018; 19: 1733-1754.](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6141368/)
+
+- 2. [Poirier S. and Chapleur O. Inhibition of anaerobic digestion by phenol and ammonia: Effect on degradation
+performances and microbial dynamics. Data in Brief. 2018: 2235-2239.](https://www.researchgate.net/publication/326229855_Inhibition_of_anaerobic_digestion_by_phenol_and_ammonia_Effect_on_degradation_performances_and_microbial_dynamics)
+
+- 3. [Poirier S, Déjean, S, Midoux, C, Lê Cao K-A, Chapleur O (2020). Integrating independent microbial studies to build predictive models of anaerobic digestion inhibition by ammonia and phenol. Bioresource Technology 316:123952](https://www.researchgate.net/publication/343412985_Integrating_independent_microbial_studies_to_build_predictive_models_of_anaerobic_digestion_inhibition_by_ammonia_and_phenol)

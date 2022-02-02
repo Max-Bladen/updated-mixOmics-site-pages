@@ -108,9 +108,7 @@ optimal.ncomp <- 2
 
 ## Tuning the number of features
 
-To tune the number of utilised features, the `tune()` function is used. Again, this uses LOGOCV across the grid of inputted `test.keepX` values. Based on the mean classification error rate (overall error rate or BER) and a centroids distance, the optimal number of variables `keepX` to be included in the final model can be extracted. Figure 3 shows the tuning process, where the optimal number of features for the first and second component are 25 and 45 respectively. 
-
-In fact, whilst the BER decreases with the addition of component 2, the standard deviation remains large, and thus only one component is optimal. However, the addition of this second component is useful for the graphical outputs, and also to attempt to discriminate the hESC and hiPCS cell types.
+To tune the number of utilised features, the `tune()` function is used. Again, this uses LOGOCV across the grid of inputted `test.keepX` values. Based on the mean classification error rate (overall error rate or BER) and a centroids distance, the optimal number of variables `keepX` to be included in the final model can be extracted. Below the optimal number of features to retain is printed.
 
 ``` {r, fig.align = "center"}
 set.seed(5249) # For a reproducible result here, remove for your own analyses
@@ -121,15 +119,11 @@ splsda.tune <- tune(X = X, Y = Y, study = study,  # tune the number of features
                               method = 'mint.splsda', 
                               measure = 'BER', # balanced error rate
                               dist = "centroids.dist")
-
-plot(splsda.tune)
  
 optimal.keepX <- splsda.tune$choice.keepX # extract optimal values
 
-splsda.tune$choice.keepX
+optimal.keepX
 ```
-
-<p style="text-align: center;">FIGURE 3: Tuning keepX in MINT sPLS-DA performed on the `stemcells` gene expression data. Each coloured line represents the balanced error rate (y-axis) per component across all tested keepX values (x-axis). The diamond indicates the optimal keepX value on a particular component which achieves the lowest classification error rate as determined with a one-sided t−test across the studies</p>
 
 # Final Model
 
@@ -146,7 +140,7 @@ final.splsda.model <- mint.splsda(X = X, Y = Y, study = study,
 
 ## Sample Plots
 
-The sample plot with the `plotIndiv()` function projects each sample into the space spanned by the components. This plot can depict all samples on the global components (Figure 4a) or each sample on the partial components associated with the study it was drawn from (Figure 4b). The visualisation of the partial components enables the examination of each study individually and check that the model is able to extract a good agreement between studies. 
+The sample plot with the `plotIndiv()` function projects each sample into the space spanned by the components. This plot can depict all samples on the global components (Figure 3a) or each sample on the partial components associated with the study it was drawn from (Figure 3b). The visualisation of the partial components enables the examination of each study individually and check that the model is able to extract a good agreement between studies. 
 
 Similar to the basic MINT PLS-DA model (Figure 1), the first component discriminates the Fibroblast group well while the second discriminates the hESC and hiPSC groups further, but not such that their 95% confident ellipses are non-overlapping (Figure 4a).
 
@@ -164,11 +158,11 @@ plotIndiv(final.splsda.model, study = 'all.partial',
           subtitle = paste("Study",1:4))
 ```
 
-<p style="text-align: center;">FIGURE 4: : Sample plots from the MINT sPLS-DA performed on the `stemcells` gene expression data. Samples are projected into the space spanned by the first two components. Samples are coloured by their cell types and symbols indicate study membership. (a) Global components from the model with 95% ellipse confidence intervals around each sample class. (b) Partial components per study show a good agreement across studies</p>
+<p style="text-align: center;">FIGURE 3: : Sample plots from the MINT sPLS-DA performed on the `stemcells` gene expression data. Samples are projected into the space spanned by the first two components. Samples are coloured by their cell types and symbols indicate study membership. (a) Global components from the model with 95% ellipse confidence intervals around each sample class. (b) Partial components per study show a good agreement across studies</p>
 
 ## Variable Plots
 
-The correlation circle plot is a useful tool in examining the correlations between each feature pair as well as the contribution of each feature to the components. There are two main clusters that can be seen in Figure 5 that are either postively or negatively associated with component 1. A subset of genes that are strongly correlated and negatively associated to component 1 (negative values on the x-axis), which are likely to characterise the groups of samples hiPSC and hESC, and a subset of genes positively associated to component 1 that may characterise the fibroblast samples (and are negatively correlated to the previous group of genes).
+The correlation circle plot is a useful tool in examining the correlations between each feature pair as well as the contribution of each feature to the components. There are two main clusters that can be seen in Figure 4 that are either postively or negatively associated with component 1. A subset of genes that are strongly correlated and negatively associated to component 1 (negative values on the x-axis), which are likely to characterise the groups of samples hiPSC and hESC, and a subset of genes positively associated to component 1 that may characterise the fibroblast samples (and are negatively correlated to the previous group of genes).
 
 ``` {r, fig.align = "center"}
 # all gene names have the same first 10 characters, 
@@ -181,9 +175,9 @@ plotVar(final.splsda.model,
         var.names = shortenedNames)
 ```
 
-<p style="text-align: center;">FIGURE 5: Correlation circle plot representing the genes selected by MINT sPLS-DA performed on the `stemcells` gene expression data to examine the association of the genes selected on the first two components</p>
+<p style="text-align: center;">FIGURE 4: Correlation circle plot representing the genes selected by MINT sPLS-DA performed on the `stemcells` gene expression data to examine the association of the genes selected on the first two components</p>
 
-Cluster Image Maps (CIMs) can be used to represent the gene expression levels of each sample for each loci. This is depicted in Figure 6. As was seen in Figure 1, the fibroblast cells (blue rows) cluster tightly together while the remaining two groups are less discernible from one another. The expression patterns within the fibroblast group are highly homogeneous across samples. This is not the case with the hiPSC and hESC groups. 
+Cluster Image Maps (CIMs) can be used to represent the gene expression levels of each sample for each loci. This is depicted in Figure 5. As was seen in Figure 1, the fibroblast cells (blue rows) cluster tightly together while the remaining two groups are less discernible from one another. The expression patterns within the fibroblast group are highly homogeneous across samples. This is not the case with the hiPSC and hESC groups. 
 
 ``` {r, fig.align = "center"}
 cim(final.splsda.model, comp = 1, margins=c(10,5), 
@@ -191,9 +185,9 @@ cim(final.splsda.model, comp = 1, margins=c(10,5),
     row.names = FALSE, title = "MINT sPLS-DA, component 1")
 ```
 
-<p style="text-align: center;">FIGURE 6: Clustered Image Map of the genes selected by MINT sPLS-DA on the `stemcells` gene expression data for component 1 only. A hierarchical clustering based on the gene expression levels of the selected genes on component 1, with samples in rows coloured according to cell type</p>
+<p style="text-align: center;">FIGURE 5: Clustered Image Map of the genes selected by MINT sPLS-DA on the `stemcells` gene expression data for component 1 only. A hierarchical clustering based on the gene expression levels of the selected genes on component 1, with samples in rows coloured according to cell type</p>
 
-The last variable plot to be used is the Relevance network. This provides similar insights to the CIM above. Only the associations between the selected genes and the cell type (dummy encoded) are shown (Figure 7).
+The last variable plot to be used is the Relevance network. This provides similar insights to the CIM above. Only the associations between the selected genes and the cell type (dummy encoded) are shown (Figure 6).
 
 ``` {r, fig.align = "center"}
 network(final.splsda.model, comp = 1, 
@@ -201,18 +195,18 @@ network(final.splsda.model, comp = 1,
         shape.node = c("rectangle", "circle"))
 ```
 
-<p style="text-align: center;">FIGURE 7: Relevance network of the genes selected by MINT sPLS-DA performed on the `stemcells` gene expression data for component 1 only.</p>
+<p style="text-align: center;">FIGURE 6: Relevance network of the genes selected by MINT sPLS-DA performed on the `stemcells` gene expression data for component 1 only.</p>
 
 
 # Performance of the model
 
-Use of the `auroc()` function will yield a visualisation of classification performance when undergoing the LOGOCV procedure from above. The interpretation of this output may not be particularly insightful in relation to the performance evaluation of our methods, but can complement the statistical analysis. For example, the model's classification of the fibroblast group had perfect specificity and sensitivity across the first component compared to the other two groups. (Figure 8).
+Use of the `auroc()` function will yield a visualisation of classification performance when undergoing the LOGOCV procedure from above. The interpretation of this output may not be particularly insightful in relation to the performance evaluation of our methods, but can complement the statistical analysis. For example, the model's classification of the fibroblast group had perfect specificity and sensitivity across the first component compared to the other two groups. (Figure 7).
 
 ``` {r, fig.align = "center"}
 auroc(final.splsda.model, roc.comp = 1)
 ```
 
-<p style="text-align: center;">FIGURE 8: ROC curve and AUC from the MINT sPLS-DA performed on the `stemcells` gene expression data for global component 1, averaged across one-vs-all comparisons. Numerical outputs include the AUC and a Wilcoxon test p−value for each ‘one vs. other’ class comparison that are performed per component.</p>
+<p style="text-align: center;">FIGURE 7: ROC curve and AUC from the MINT sPLS-DA performed on the `stemcells` gene expression data for global component 1, averaged across one-vs-all comparisons. Numerical outputs include the AUC and a Wilcoxon test p−value for each ‘one vs. other’ class comparison that are performed per component.</p>
 
 ## Prediction on an external test set
 

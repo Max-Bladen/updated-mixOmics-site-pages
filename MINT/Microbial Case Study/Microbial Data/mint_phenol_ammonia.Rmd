@@ -1,0 +1,260 @@
+---
+title: "Identifying bioindicators of ammonia and phenol inhibition"
+author: "Olivier Chapleur"
+date: ""
+output:
+  pdf_document:
+    number_sections: yes
+    toc: yes
+    toc_depth: '4'
+  html_document:
+    number_sections: yes
+    toc: yes
+    toc_depth: 4
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+\newpage
+
+
+# Objectives
+
+Different samples were produced in 2 in-house independant experiments testing the influence of ammonia and phenol on anaerobic digestion (studies 1 and 2). Detailed description of the studies if available in 
+
+*Poirier S. and Chapleur O. Influence of support media supplementation to reduce the inhibition of anaerobic digestion by phenol and ammonia: Effect on degradation performances and microbial dynamics. Data in Brief. 2018; 19: 1733-1754.*
+
+and 
+
+*Poirier S. and Chapleur O. Inhibition of anaerobic digestion by phenol and ammonia: Effect on degradation performances and microbial dynamics. Data in Brief. 2018: 2235-2239.*
+
+
+The general purpose of this study is to assess if bioindicators of inhibition by ammonia or phenol can be identified. 
+
+In this study we show that a strong experimental effect exists ("batch effect"). However, it can be removed with statistical methods to focus on the effect of inhibitors only. 
+
+
+# Data used for the study
+
+## Loading of the data
+
+```{r importdata,echo=FALSE,message=FALSE,warning=FALSE}
+rm(list=ls(all=TRUE))
+#packages used to treat the data
+library(mixOmics)
+library(Hotelling)
+library(knitr)
+
+#data of studies 1 and 2 is imported
+load("mint_phenol_ammonia.RData")
+#data has been filtered previously (all OTUs with a relative abundance always inferior to 3% (in all samples) are removed)
+
+couleur_inhib=c("cornflowerblue", "grey", "darkorange") # colors used for the graphs
+```
+
+## Transformation of the data
+
+```{r,echo=FALSE}
+#raw data are transformed to relative abundances and are CLR transformed. 
+ cat("\n")
+TSS.divide = function(x){
+ x/sum(x)
+} #function to calculate the relative abundance
+
+# function is applied to each row for studies 1 and 2
+pc_abundance_studies_1_2 = (apply(t(abundance), 1, TSS.divide))
+#clr transformation of data from studies 1 and 2
+clr_abundance_studies_1_2=clr(t(pc_abundance_studies_1_2+0.01))
+ 
+metadata_studies_1_2=metadata
+
+```
+
+
+\newpage
+
+
+# General view of the data with principal component analysis (PCA)
+
+
+```{r, echo=FALSE, fig.height=6, fig.width=8}
+## pca is computed
+pca=pca((clr_abundance_studies_1_2), scale=FALSE,center = TRUE,ncomp=5, logratio='none') 
+#obtained pca is plotted
+plotIndiv(pca,  group=metadata_studies_1_2$inhib_inoc , 
+          ind.names = F,legend=T,
+          pch = as.numeric(factor(metadata_studies_1_2$experiment))+15,
+          pch.levels=(metadata_studies_1_2$experiment), 
+          title="PCA",legend.title = "Inhibitor", 
+          legend.title.pch = "Experiment", size.legend = rel(2.4),
+          size.legend.title = rel(2.5), col.per.group =  couleur_inhib)
+```
+
+An important study effect is visible. 
+
+\newpage
+
+# Identification of biomarkers with sparse partial least square discriminant analysis (sPLSDA)
+
+
+
+Sparse PLSDA (sPLSDA) enables to select variables discriminant of groups of samples. It does not specifically take into account a "study" effect.
+
+More information is available in *Lê Cao K.A., Boitard S., and Besse P. Sparse PLS discriminant analysis: Biologically relevant feature selection and graphical displays for multiclass problems. BMC Bioinformatics. 2011; 12.*
+
+## sPLSDA tuning (how many variables must be kept?)
+
+An error rate is calculated according to the number of variables kept on each component. Number of variables corresponding to the best error rate is selected.  
+
+```{r ,echo=FALSE, eval = TRUE, message=FALSE, warning=FALSE, fig.height=6,fig.width=8}
+
+splsda_tune = tune.splsda(X = clr_abundance_studies_1_2,Y=metadata_studies_1_2$inhib_inoc, ncomp = 2,logratio = "none",multilevel = NULL, test.keepX = c(seq(5,50, 1)), validation = c('Mfold'), folds = 5, dist = 'max.dist',nrepeat = 10,progressBar = FALSE)
+
+cat("Tune splsda with Mfold validation, folds=5, nrepat=20, ie dataset is divided in 5 groups of samples, 4 groups are used to build the model, the last one is used as training set. The 5 groups are then permuted and process iterated. 20 repeats means that all the process is repeated 20 times, ie that 20 partitions of samples in groups of 5 are tested. ")
+```
+
+ 
+```{r ,echo=FALSE,eval=TRUE, warning=FALSE, fig.height=6,fig.width=8}
+
+cat("The plot shows the average error rate with respect to the keepX values tested:")
+plot(splsda_tune)
+```
+
+After tuning the parameters, sPLSDA can be computed. 
+
+```{r,eval=TRUE,echo=FALSE}
+#number of components and variables kept after tuning.
+choice.ncomp = length(splsda_tune$choice.keepX)
+choice.keepX = splsda_tune$choice.keepX
+
+# the sPLS-DA
+splsda = splsda(X = clr_abundance_studies_1_2, Y = metadata_studies_1_2$inhib_inoc,ncomp = choice.ncomp,keepX = choice.keepX,logratio= "none")
+```
+
+## sPLSDA visualisation
+
+```{r , echo= FALSE,eval=TRUE,fig.height=6,fig.width=8}
+
+plotIndiv(splsda,  group=metadata_studies_1_2$inhib_inoc , ind.names = F,legend=T,pch = as.numeric(factor(metadata_studies_1_2$experiment))+15,pch.levels=(metadata_studies_1_2$experiment), title="sPLSDA",  col.per.group =  couleur_inhib)
+
+```
+
+Even if the different samples are well grouped based on the type of inhibitor, a "study" effect is still visible. 
+
+##  sPLS-DA performance (prediction error rate)
+
+
+``` {r, include = TRUE,eval=TRUE, fig.height=6, fig.width=8}
+splsda_perf = perf(splsda, validation = 'Mfold', folds = 5, 
+                   progressBar = FALSE, nrepeat = 20)
+cat("Perf with Mfold validation, nrepat=20, folds=5")
+
+splsda_perf$error.rate
+
+```
+
+
+\newpage
+
+# Identification of biomarkers while taking into account the batch effect: multivariate integrative method (MINT) sPLSDA
+
+
+MINT focuses on combining and integrating independent studies measured on the same variables. More information is available in *Rohart F., Eslami A., Matigian N., Bougeard S., and Lê Cao K.A. MINT: A multivariate integrative method to identify reproducible molecular signatures across independent experiments and platforms. BMC Bioinformatics. 2017; 18.*
+
+
+```{r,echo=FALSE, fig.height=6, fig.width=8}
+#information concerning the origin of the sample (study name) will be used in MINT
+study = unlist(list(metadata_studies_1_2$experiment))
+study=droplevels(study)
+```
+
+
+## Tuning: how many components and variable to keep in the model? 
+
+
+
+```{r,echo=FALSE, fig.height=6, fig.width=8}
+tune.mint = tune(X = clr_abundance_studies_1_2, Y = metadata_studies_1_2$inhib_inoc, study = study, ncomp = 6, test.keepX = seq(1, 50, 1), 
+method = 'mint.splsda', dist = "max.dist", progressBar = FALSE)
+
+plot(tune.mint, col = color.jet(6))
+# optimal number of components
+tune.mint$choice.ncomp #tune.mint$choice.ncomp 
+
+# optimal keepX
+tune.mint$choice.keepX
+
+```
+
+After tuning the parameters, MINT sPLSDA can be computed. 
+
+```{r,echo=FALSE, fig.height=6, fig.width=8}
+## Computation of MINT sPLSDA and projection of the samples on components 1 and 2
+
+mint.splsda.res = mint.splsda(X = clr_abundance_studies_1_2, Y = metadata_studies_1_2$inhib_inoc, study = study, ncomp = 3,  
+                              keepX = tune.mint$choice.keepX)
+
+# cat("Variables kept on comp 1")
+# selectVar(mint.splsda.res, comp = 1)
+# 
+# cat("Variables kept on comp 2")
+# selectVar(mint.splsda.res, comp = 2)
+```
+
+## MINT sPLSDA visualisation
+
+```{r,echo=FALSE, fig.height=6, fig.width=8}
+plotIndiv(mint.splsda.res,  group=metadata_studies_1_2$inhib_inoc , ind.names = F,legend=T,pch = as.numeric(factor(metadata_studies_1_2$experiment))+15,pch.levels=(metadata_studies_1_2$experiment), subtitle="MINT sPLSDA",legend.title = "Inhibitor", legend.title.pch = "Experiment", size.legend = rel(2.4),
+size.legend.title = rel(2.5),  col.per.group =  couleur_inhib)
+```
+
+
+
+\newpage
+
+## Heatmap of the selected variables
+
+A Clustered Image Map including the final gene signature is plotted (Euclidian distance and ward linkage). 
+
+
+```{r, eval=TRUE,echo=FALSE, fig.height=12, fig.width=9}
+
+#a file heatmap_legend was created previously with the name of the OTUs to plot on the figure. 
+heatmap_col_names=paste(colnames(clr_abundance_studies_1_2), heatmap_legend[colnames(clr_abundance_studies_1_2),1]) #creation of the labels to plot as a legend for the heatmap
+
+color=c(colorRampPalette(c( 'darkblue',  'cornflowerblue'))(15),colorRampPalette(c('cornflowerblue','lemonchiffon', 'yellow'))(15), colorRampPalette(c(  'yellow', 'orange'))(40)) #color palette for the heatmap
+
+cim_mint_splsda=cim( color=color,mat=mint.splsda.res, comp = c(1,2), 
+    row.sideColors = couleur_inhib[as.numeric(metadata_studies_1_2$inhib_inoc)], row.names = FALSE,
+    clust.method = c("ward", "ward"),xlab="OTUs", ylab="Samples", legend=list(cex=1.6), col.cex=0.9, margins=c(15,3), symkey=FALSE, col.names=heatmap_col_names)
+
+# dev.off()
+# # 
+# tiff(filename = "figure_2bis.tiff", width = 3000, height = 3700, res = 400,pointsize=12)
+# 
+color=c(colorRampPalette(c( 'darkblue',  'cornflowerblue'))(15),colorRampPalette(c('cornflowerblue','lemonchiffon', 'yellow'))(15), colorRampPalette(c(  'yellow', 'orange', 'orangered', 'darkred'))(40))
+
+cim_mint_splsda=cim( color=color,mat=mint.splsda.res, comp = c(1,2),
+    row.sideColors = couleur_inhib[as.numeric(metadata_studies_1_2$inhib_inoc)], row.names = FALSE,
+    clust.method = c("ward", "ward"),xlab="OTUs", ylab="Samples", legend=list(cex=1.6), col.cex=0.9, margins=c(15,3), symkey=FALSE, col.names=heatmap_col_names)
+
+# dev.off()
+
+```
+
+
+
+
+
+### Perfomance of the MINT sPLSDA model
+
+The performance of the MINT sPLS-DA model can be assessed with the \texttt{perf} function. (Since the previous tuning of the MINT sPLS-DA model was conducted with the distance \texttt{max.dist}, the same distance is used to assess the performance of the final model.)
+
+```{r,echo=FALSE, fig.height=6, fig.width=8}
+perf.mint = perf(mint.splsda.res, progressBar = FALSE)
+#plot(perf.mint, col = color.mixo(1:3))
+perf.mint$global.error
+perf.mint$global.error$BER
+```
