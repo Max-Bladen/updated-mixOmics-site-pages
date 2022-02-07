@@ -1,0 +1,377 @@
+---
+title: "Bioindicators ammonia"
+author: "Olivier Chapleur"
+date: ''
+output:
+  word_document:
+    toc: yes
+    toc_depth: '4'
+  html_document:
+    number_sections: yes
+    toc: yes
+    toc_depth: 4
+  pdf_document:
+    number_sections: yes
+    toc: yes
+    toc_depth: '4'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+\newpage
+
+
+# Objectives
+
+Different samples were produced in experiment testing the influence of ammonia (studies 1 to 4). 
+The general purpose of this study is to assess if bioindicators of inhibition by ammonia can be identified within studies 1 and 2 and used to predict inhibition in samples of other studies (studies 3 and 4). 
+
+As 16S data was generated with different sequencing methodologies, it was agregated at the genus level. 
+
+# Data import
+
+```{r importdata,echo=FALSE,message=FALSE,warning=FALSE}
+rm(list=ls(all=TRUE))
+#packages used to treat the data
+library(mixOmics) 
+library(Hotelling)
+library(knitr)
+
+#data of the different studies is imported
+#data has been filtered previously (all genera with a relative abundance always inferior to 3% (in all samples) are removed)
+load("data_prediction_data.RData")
+#data and metadata of studies 1 and 2 and studies 3 and 4 are grouped together.
+couleur_inhib=c("cornflowerblue", "grey") # colors used for the graphs
+
+```
+
+# Data transformation 
+
+```{r,echo=FALSE}
+#raw data are transformed to relative abundances and are CLR transformed. 
+ cat("\n")
+TSS.divide = function(x){
+ x/sum(x)
+} #function to calculate the relative abundance
+
+# function is applied to each row for studies 1 and 2
+pc_abundance_studies_1_2 = (apply(t(abundance_studies_1_2), 1, TSS.divide))
+#clr transformation of data from studies 1 and 2
+clr_abundance_studies_1_2=clr(t(pc_abundance_studies_1_2+0.001))
+#same process for studies 3 and 4
+pc_abundance_studies_3_4 = (apply(t(abundance_studies_3_4), 1, TSS.divide))
+clr_abundance_studies_3_4=clr(t(pc_abundance_studies_3_4+0.001))
+
+```
+
+
+
+
+\newpage
+
+# General view of the data with PCA
+
+
+
+```{r, echo=FALSE, fig.height=6, fig.width=8}
+pca=pca((clr_abundance_studies_1_2), scale=FALSE,center = TRUE,ncomp=5, logratio='none')
+
+a=plotIndiv(pca,  group=metadata_studies_1_2$inhib_inoc , ind.names = F,legend=F,pch = as.numeric(factor(metadata_studies_1_2$experiment))+15,pch.levels=(metadata_studies_1_2$experiment), title="PCA",legend.title = "Inhibitor", legend.title.pch = "Experiment", size.legend = rel(2.4),
+size.legend.title = rel(2.5), col.per.group =  couleur_inhib)
+
+```
+
+\newpage
+
+# Identification of biomarkers without taking into account the batch effect: sPLSDA and associated methods
+
+
+
+Sparse PLSDA (sPLSDA) enables to select the variables discriminant of the groups of samples
+
+## sPLSDA tuning (how many variables must be kept?)
+
+An error rate is calculated according to the number of variables kept on each component. Number of variables corresponding to the best error rate is selected. 
+
+```{r ,echo=FALSE, eval = TRUE, message=FALSE, warning=FALSE, fig.height=6,fig.width=8}
+
+splsda_tune = tune.splsda(X = clr_abundance_studies_1_2,Y=metadata_studies_1_2$inhib_inoc, ncomp = 2,logratio = "none",
+                          multilevel = NULL, 
+                          
+                          test.keepX = c(seq(5,50, 1)), 
+                          validation = c('Mfold'), 
+                          folds = 5, 
+                          dist = 'max.dist', 
+                          nrepeat = 10,progressBar = FALSE)
+
+```
+
+ 
+```{r ,echo=FALSE,eval=TRUE, warning=FALSE, fig.height=6,fig.width=8}
+
+cat("The plot shows the average error rate with respect to the keepX values tested:")
+plot(splsda_tune)
+```
+
+After tuning the parameters, sPLSDA can be computed. 
+
+```{r,eval=TRUE,echo=FALSE}
+#number of variables and components kept
+choice.ncomp = length(splsda_tune$choice.keepX)
+choice.keepX = splsda_tune$choice.keepX
+
+# the sPLS-DA
+splsda = splsda(X = clr_abundance_studies_1_2, 
+                    Y = metadata_studies_1_2$inhib_inoc,
+                    ncomp = choice.ncomp,
+                    keepX = choice.keepX,
+                    logratio= "none")
+```
+
+## sPLSDA visualisation
+
+```{r , echo= FALSE,eval=TRUE,fig.height=6,fig.width=8}
+
+
+
+
+b=plotIndiv(splsda,  group=metadata_studies_1_2$inhib_inoc , ind.names = F,legend=F,pch = as.numeric(factor(metadata_studies_1_2$experiment))+15,pch.levels=(metadata_studies_1_2$experiment), title="sPLSDA",  col.per.group =  couleur_inhib)
+
+
+```
+
+
+
+
+###  sPLS-DA performance (prediction error rate)
+
+
+``` {r, include = TRUE,eval=TRUE, fig.height=6, fig.width=8}
+splsda_perf = perf(splsda, validation = 'Mfold', folds = 5, 
+                   progressBar = FALSE, nrepeat = 20)
+cat("Perf with Mfold validation, nrepat=20, folds=5")
+
+splsda_perf$error.rate
+
+#plot(splsda_perf)
+```
+
+
+\newpage
+
+# Identification of biomarkers while taking into account the batch effect: MINT sPLSDA
+
+```{r,echo=FALSE, fig.height=6, fig.width=8}
+
+#the combined data set X of studies 1 and 2
+X = clr_abundance_studies_1_2
+#dim(X) 
+
+# the outcome vector Y:  
+Y =metadata_studies_1_2$inhib_inoc
+#length(Y) 
+#summary(Y)
+
+# the vector indicating each independent study
+study = unlist(list(metadata_studies_1_2$experiment))
+study=droplevels(study)
+# number of samples per study:
+#summary(study)
+
+# experimental design
+table(Y,study)
+```
+
+### Tuning: how many components and variable to keep in the model? 
+
+The tuning uses leave one out cross validation.
+
+```{r,echo=FALSE, fig.height=6, fig.width=8}
+tune.mint = tune(X = X, Y = Y, study = study, ncomp = 6, test.keepX = seq(1, 50, 1), 
+method = 'mint.splsda', dist = "max.dist", progressBar = FALSE)
+
+#plot(tune.mint, col = color.jet(6))
+# optimal number of components
+tune.mint$choice.ncomp #tune.mint$choice.ncomp 
+
+# optimal keepX
+tune.mint$choice.keepX
+
+
+```
+
+### Computation of MINT sPLSDA and projection of the samples on components 1 and 2
+
+```{r}
+
+
+mint.splsda.res = mint.splsda(X = X, Y = Y, study = study, ncomp = 3,  
+                              keepX = tune.mint$choice.keepX)
+
+# cat("Variables kept on comp 1")
+# selectVar(mint.splsda.res, comp = 1)
+# 
+# cat("Variables kept on comp 2")
+# selectVar(mint.splsda.res, comp = 2)
+```
+
+```{r,echo=FALSE, fig.height=6, fig.width=8}
+
+
+c=plotIndiv(mint.splsda.res,  group=metadata_studies_1_2$inhib_inoc , ind.names = F,legend=T,pch = as.numeric(factor(metadata_studies_1_2$experiment))+15,pch.levels=(metadata_studies_1_2$experiment), subtitle="MINT sPLSDA",legend.title = "Inhibitor", legend.title.pch = "Experiment", size.legend = rel(2.4),
+size.legend.title = rel(2.5),  col.per.group =  couleur_inhib)
+
+
+```
+
+
+
+```{r, eval=FALSE,echo=FALSE, fig.height=8, fig.width=24}
+library(ggpubr)
+tiff(filename = "figure_3.tiff", width = 5000, height = 1800, res = 400,pointsize=12)
+
+ggarrange(a$graph, b$graph,c$graph,
+                    labels = c("A", "B", "C"),
+                    ncol = 3, nrow = 1,common.legend = TRUE, legend = "right")
+dev.off
+```
+
+
+\newpage
+
+
+
+
+
+
+
+### Perfomance of the MINT sPLSDA model
+
+The performance of the MINT sPLS-DA model can be assessed with the \texttt{perf} function. (Since the previous tuning of the MINT sPLS-DA model was conducted with the distance \texttt{max.dist}, the same distance is used to assess the performance of the final model.)
+
+```{r,echo=FALSE, fig.height=6, fig.width=8}
+perf.mint = perf(mint.splsda.res, progressBar = FALSE)
+#plot(perf.mint, col = color.mixo(1:3))
+perf.mint$global.error
+perf.mint$global.error$BER
+```
+
+
+
+
+
+
+# Prediction of Lufan and Peng data, model on one component
+
+```{r, echo=FALSE, eval=TRUE}
+## model with one component only
+tune.mint = tune(X = X, Y = Y, study = study, ncomp = 1, test.keepX = seq(5, 50, 1), 
+method = 'mint.splsda', dist = "max.dist", progressBar = FALSE)
+
+
+
+mint.splsda.res = mint.splsda(X = X, Y = Y, study = study, ncomp = 1,  
+                              keepX = tune.mint$choice.keepX)
+
+
+# we predict lufan
+test.predict <- predict(mint.splsda.res, newdata = clr_abundance_studies_3_4, dist = "max.dist",
+                        study.test = factor(metadata_studies_3_4$experiment))
+Prediction <- test.predict$class$max.dist[, 1]
+
+# the confusion table compares the real subtypes with the predicted subtypes
+
+cat("Summary of the results of the prediction. ")
+get.confusion_matrix(truth = metadata_studies_3_4$inhib_inoc,
+                     predicted = Prediction)
+
+
+#metadata=read.csv("metadata_all_data_all_exp.csv",row.names=1)
+
+
+cat("Detailed results of the prediction. ")
+
+
+```
+
+\newpage
+
+
+# here I try to extract the coordinate of initial and predicted samples to draw a figure with everything
+
+
+
+```{r, echo=FALSE, eval=TRUE}
+## here model with two components
+
+tune.mint = tune(X = X, Y = Y, study = study, ncomp = 2, test.keepX = seq(1, 50, 1), 
+method = 'mint.splsda', dist = "max.dist", progressBar = FALSE)
+
+
+
+mint.splsda.res = mint.splsda(X = X, Y = Y, study = study, ncomp = 2,  
+                              keepX = tune.mint$choice.keepX)
+
+
+# we predict lufan
+test.predict <- predict(mint.splsda.res, newdata = clr_abundance_studies_3_4, dist = "max.dist",
+                        study.test = factor(metadata_studies_3_4$experiment))
+Prediction <- test.predict$class$max.dist[, 1]
+
+
+
+predit=data.frame(test.predict$variates) ##coordonn?es des points pr?dits
+construit=data.frame(mint.splsda.res$variates$X) ## coordonn?es des points utilis?s pour la construiction 
+
+
+
+
+
+
+```
+
+
+
+```{r, eval=FALSE}
+
+background2=background.predict(object=mint.splsda.res, comp.predicted = 1, dist='max.dist', xlim=c(-3,3),ylim = c(-3,3))
+
+```
+
+
+
+
+
+
+```{r, eval=TRUE}
+
+ordered_factor=factor( factor(metadata_studies_3_4$prediction), levels(factor(metadata_studies_3_4$prediction))[c(4,3,1,2,8,7,5,6)])
+
+# for(i in 1:length(background2))
+#             {
+#                 if(!is.null(background2[[i]]))
+#                     background2[[i]]=data.frame(id=i,col=names(background2)[i],
+#                                                background2[[i]])
+#             }
+# 
+#             background2 = do.call(rbind,background2)
+
+#tiff(filename = "figure_5.tiff", width = 3000, height = 1800, res = 400,pointsize=12)
+
+
+  ggplot(data=predit, aes(x=dim1, y=dim2))+
+ # geom_polygon(data = background2,aes(x=Var1, y=Var2,fill = col), inherit.aes = FALSE, show.legend =TRUE)+
+    scale_fill_manual(values = c("lavender", "grey95"), name='Prediction')+
+  geom_point(aes(color=ordered_factor, shape=ordered_factor), size=2.5)+
+    theme(legend.title=element_blank()) + 
+  scale_color_manual(name = "Study & inhibition", values=c("grey50", "green","cornflowerblue", "darkblue","grey50" , "cornflowerblue", "darkblue", "green" ), labels=levels(droplevels(ordered_factor)))  + 
+  scale_shape_manual(name = "Study & inhibition", values=c(15,15,15, 15, 8,8,8,8),  labels=levels(droplevels(ordered_factor)))  +
+  labs( y="Component 2", x = "Component 1",color="Inhibition")+
+  theme_bw()+
+theme(strip.text= element_text(size=16, face='bold'))+
+  geom_text(label=metadata_studies_3_4$prediction_code_plot,hjust=-0.4,vjust=1.2, cex=3)
+ 
+#dev.off()
+```

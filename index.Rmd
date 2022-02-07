@@ -30,7 +30,7 @@ options(WordpressLogin = c( "maxbladen" = "" ))
 
 ```{r}
 # current page
-knit2wp(input = '.Rmd', 
+knit2wp(input = '', 
         title = '',  
         shortcode = FALSE, publish = TRUE, action = c("newPage"))
 ```

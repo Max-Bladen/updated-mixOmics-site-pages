@@ -1,4 +1,4 @@
-## ----setup, include=FALSE----------------------------------------------------------------------
+## ----setup, include=FALSE--------------------------------------------------------------------------------------------------
 knitr::opts_chunk$set(dpi = 100, 
                       echo= TRUE, 
                       warning=FALSE, 
@@ -8,37 +8,28 @@ knitr::opts_chunk$set(dpi = 100,
                       out.width = "90%")
 
 
-## ----------------------------------------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------------------------
 library(mixOmics) # import the mixOmics library
 
 
-## ----------------------------------------------------------------------------------------------
-load("Microbial Data/mint_phenol_ammonia.RData") # load the data
+## --------------------------------------------------------------------------------------------------------------------------
+load("Microbial Data/data_prediction_data.RData") # load the data
 
-treatment <- metadata$inhib_inoc # extract the Y vector, the type of inoculant
-study = metadata$experiment # extract the study each sample is from
+# extract the Y vectors
+treatment.1.2 <- metadata_studies_1_2$inhib_inoc 
+treatment.3.4 <- metadata_studies_3_4$inhib_inoc 
+treatment <- c(treatment.1.2, treatment.3.4)
 
+# extract the study each sample is from
+study.1.2 <- metadata_studies_1_2$experiment
+study.3.4 <- metadata_studies_3_4$experiment
+study <- c(study.1.2,study.3.4)
 
-## ----------------------------------------------------------------------------------------------
-TSS.divide = function(x){ # function to apply a TSS transformation to the data
- x/sum(x)
-}
-
-# convert from raw to compositional data as well as transpose abundance so
-# that OTUs are columns 
-t.abundance <- apply(t(abundance), 1, TSS.divide)
-
-
-## ----------------------------------------------------------------------------------------------
-abundance.offset <- t.abundance + 0.01 # apply offset
-
-# can see there is a lot of zeroes
-cat("Number of zeroes prior to offset: ", length(which(t.abundance==0))) 
-
-cat("Number of zeroes after offset: ", length(which(abundance.offset==0)))
+# combine abundance datasets into a single dataframe
+abundance <- cbind(abundance_studies_1_2, abundance_studies_3_4)
 
 
-## ----------------------------------------------------------------------------------------------
+## ---- echo = FALSE---------------------------------------------------------------------------------------------------------
 # function to remove any OTUs which has a count lower than cutoff % of the total
 low.count.removal <- function(data, cutoff=0.01) {
   
@@ -50,14 +41,13 @@ low.count.removal <- function(data, cutoff=0.01) {
     return(list(data.filter = data.filter, keep.otu = keep.otu))
 }
 
+# -----------------------------------------------------------------------------#
+
+abundance.offset <- abundance + 1 # apply offset
+
 result.filter <- low.count.removal(abundance.offset, cutoff=0.01)
 abundance.filter <- result.filter$data.filter
 
-cat("Number of OTU's prior to filtering: ", nrow(abundance.offset))
-cat("Number of OTU's remaining after filtering: ", nrow(abundance.filter))
-
-
-## ----------------------------------------------------------------------------------------------
 # apply the clr transformation, offset = 0 as this was done above
 # note that the abundance dataframe was transposed for the last time, leaving 
 # the OTUs in the columns
@@ -68,200 +58,172 @@ class(abundance.processed) <- "matrix" # convert from clr object to matrix
 abundance.processed <- data.frame(abundance.processed) # then convert to df
 
 
-## ---- fig.align = "center"---------------------------------------------------------------------
+## ---- fig.align = "center"-------------------------------------------------------------------------------------------------
 # undergo PCA
 ab.pca <- pca(abundance.processed, scale = TRUE, center = TRUE, ncomp = 5)
 
 # plot projection of samples in PC space
 plotIndiv(ab.pca, group=treatment, 
           ind.names = F,legend=T,
-          pch = as.numeric(factor(study))+15,
+          pch = as.numeric(factor(study))+14,
           pch.levels=(study), ellipse = TRUE, 
           title="PCA",legend.title = "Inhibitor", 
           legend.title.pch = "Experiment", size.legend = rel(2.4),
           size.legend.title = rel(2.5))
 
 
-## ---- eval = FALSE-----------------------------------------------------------------------------
-## # undergo repeated CV tuning, using the maximum distance metric
-## ab.splsda.tuning <- tune.splsda(abundance.processed, treatment,
-##                                 ncomp = 5, test.keepX = seq(5,80, 5),
-##                                 validation = c('Mfold'), dist = 'max.dist',
-##                                 folds = 5, nrepeat = 10)
-## 
-## # To reduce run time, the tuning object is saved externally and loaded in
-## #save(ab.splsda.tuning, file="Microbial Data/ab_splsda_tuning.RData")
+## --------------------------------------------------------------------------------------------------------------------------
+# determine indices of training and testing sets
+train.idx <- which(study %in% c("Study 1", "Study 2"))
+test.idx <- which(study %in% c("Study 3", "Study 4"))
+
+# separate the predictors
+X.train <- abundance.processed[train.idx, ]
+X.test <- abundance.processed[test.idx, ]
+
+# separate the class labels 
+Y.train <- treatment[train.idx]
+Y.test <- treatment[test.idx]
+
+# separate the study associations
+study.train <- as.factor(as.character(study[train.idx]))
+study.test <- as.factor(as.character(study[test.idx]))
 
 
-## ---- echo = FALSE-----------------------------------------------------------------------------
-load("Microbial Data/ab_splsda_tuning.RData")
+## --------------------------------------------------------------------------------------------------------------------------
+# tune the ncomp and keepX parameters for the MINT sPLS-DA model
+ab.mint.splsda.tuning <- tune(method = "mint.splsda",
+                              X = X.train, 
+                              Y = Y.train,
+                              study = study.train,
+                              ncomp = 5,
+                              test.keepX = seq(5,50, 3),
+                              measure = 'BER', # balanced error rate
+                              dist = "centroids.dist")
 
 
-## ---- fig.align = "center"---------------------------------------------------------------------
-plot(ab.splsda.tuning) # plot the tuning
+## --------------------------------------------------------------------------------------------------------------------------
+ab.mint.splsda.tuning$error.rate
 
-
-## ----------------------------------------------------------------------------------------------
-# extract the tuned ncomp and keepX parameters
-optimal.ncomp <- ab.splsda.tuning$choice.ncomp$ncomp
-optimal.keepX <- ab.splsda.tuning$choice.keepX[1:optimal.ncomp]
-
-
-## ----------------------------------------------------------------------------------------------
-optimal.ncomp 
-optimal.keepX
-
-
-## ---- fig.align = "center"---------------------------------------------------------------------
-# generate sPLS-DA model using tuned parameters
-ab.splsda.tuned <- splsda(abundance.processed, treatment, scale = TRUE, 
-                    ncomp = optimal.ncomp, keepX = optimal.keepX)
-
-# plot projection of samples onto the sPLS-DA components
-plotIndiv(ab.splsda.tuned,  
-          ind.names = F,legend=T,
-          pch = as.numeric(factor(study))+15,
-          pch.levels=(study), ellipse = TRUE,
-          title="sPLS-DA",legend.title = "Inhibitor", 
-          legend.title.pch = "Experiment", 
-          size.legend = rel(2.4), size.legend.title = rel(2.5))
-
-
-## ----------------------------------------------------------------------------------------------
-# asssess the performance of the model
-splsda_perf = perf(ab.splsda.tuned, validation = 'Mfold', 
-                   folds = 5, nrepeat = 20,
-                   progressBar = FALSE)
-
-splsda_perf$error.rate # print the error rate
-
-
-## ---- eval = FALSE-----------------------------------------------------------------------------
-## # tune the ncomp and keepX parameters for the MINT sPLS-DA model
-## ab.mint.splsda.tuning <- tune(method = "mint.splsda",
-##                               X=abundance.processed,
-##                               treatment,
-##                               study = study,
-##                               ncomp = 5,
-##                               test.keepX = seq(5,80, 5),
-##                               measure = 'BER', # balanced error rate
-##                               dist = "centroids.dist")
-## 
-## # To reduce run time, the tuning object is saved externally and loaded in
-## #save(ab.mint.splsda.tuning, file="Microbial Data/ab_mint_splsda_tuning.RData")
-
-
-## ---- echo = FALSE-----------------------------------------------------------------------------
-load("Microbial Data/ab_mint_splsda_tuning.RData")
-
-
-## ----------------------------------------------------------------------------------------------
-# this determines the indices of the lowest error rate and extracts the 
-# second dimension which corresponds to the optimal component number 
-optimal.ncomp <- which(ab.mint.splsda.tuning$error.rate == 
-                         min(ab.mint.splsda.tuning$error.rate),
-                       arr.ind = TRUE)[2]
+optimal.ncomp <- 2
 
 # extract the optimal keepX parameter
 optimal.keepX <- ab.mint.splsda.tuning$choice.keepX[1:optimal.ncomp]
 
-optimal.ncomp
 optimal.keepX
 
 
-## ----------------------------------------------------------------------------------------------
-# form tuned MINT sPLS-DA model
-ab.mint.splsda <- mint.splsda(X = abundance.processed, Y = treatment,
+## --------------------------------------------------------------------------------------------------------------------------
+# form tuned, trained MINT sPLS-DA model
+ab.mint.splsda <- mint.splsda(X = X.train, Y = Y.train,
                               ncomp = optimal.ncomp, keepX = optimal.keepX,
-                              study = study)
+                              study = study.train)
 
 
-## ---- fig.show = "hold", out.width = "49%"-----------------------------------------------------
+## ---- fig.align = "center"-------------------------------------------------------------------------------------------------
 plotIndiv(ab.mint.splsda, ind.names = F,legend=T,
-          pch = as.numeric(factor(study))+15,
-          pch.levels=study,
-          subtitle="Figure 4(a)",legend.title = "Inhibitor",
+          pch = as.numeric(factor(study.train))+14,
+          pch.levels=study.train,
+          ellipse = T,
+          subtitle="sPLS-DA Sample Projection",legend.title = "Inhibitor",
           legend.title.pch = "Experiment", 
           size.legend = rel(0.8))
 
-plotIndiv(ab.mint.splsda, study = "all.partial",
-          ind.names = F,legend=T,
-          pch = as.numeric(factor(study))+15, pch.levels=study,
-          title = "Figure 4(b)", subtitle = paste("Study",1:2), 
-          size.legend = rel(0.8),legend.title = "Inhibitor")
 
-
-## ---- fig.show = "hold", out.width = "49%"-----------------------------------------------------
+## ---- fig.show = "hold", out.width = "49%"---------------------------------------------------------------------------------
 plotLoadings(ab.mint.splsda, method = "median", comp = 1, 
              legend = T, study = "global", contrib = "max",
              title = "(a) All Studies, Comp 1")
 
-plotLoadings(ab.mint.splsda, method = "median", comp = 1, 
-             legend = F, study = "all.partial", contrib = "max",
-             title = "(b) Individual Studies, Comp 1", 
-             subtitle = c("Study 1", "Study 2"))
-
-
-## ---- fig.align = "center"---------------------------------------------------------------------
 plotLoadings(ab.mint.splsda, method = "median", comp = 2, 
              legend = T, study = "global", contrib = "max",
-             title = "All Studies, Comp 2")
+             title = "(b) All Studies, Comp 2")
 
 
-## ---- fig.align = "center"---------------------------------------------------------------------
+## ---- fig.align = "center"-------------------------------------------------------------------------------------------------
 plotVar(ab.mint.splsda, var.names = FALSE,
-        pch = 16)
+        pch = 16, cutoff = 0.5)
 
 
-## ---- echo = FALSE-----------------------------------------------------------------------------
-cim(ab.mint.splsda, 
-    row.sideColors = cbind(color.mixo(as.numeric(treatment)),
-                           color.mixo(as.numeric(study)+4)),
-    
-    legend = list(legend = cbind(c(levels(treatment)), c(levels(study))), 
-                col = cbind(c(color.mixo(1:3)), c(color.mixo(5:6))),
+## ---- echo = FALSE, eval = FALSE-------------------------------------------------------------------------------------------
+cim(ab.mint.splsda,
+    row.sideColors = cbind(color.mixo(as.numeric(Y.train)),
+                           color.mixo(as.numeric(study.train)+4)),
+
+    legend = list(legend = cbind(c(levels(Y.train)), c(levels(study.train))),
+                col = cbind(c(color.mixo(1:2)), c(color.mixo(5:6))),
                 title = "Treatment and Study", cex = 0.8),
-    
+
     save = 'jpeg', name.save = 'MINT Microbial CIM')
 
 
-## ---- eval = FALSE-----------------------------------------------------------------------------
+## ---- eval = FALSE---------------------------------------------------------------------------------------------------------
 ## cim(ab.mint.splsda,
-##     row.sideColors = cbind(color.mixo(as.numeric(treatment)), color.mixo(as.numeric(study)+4)),
+##     row.sideColors = cbind(color.mixo(as.numeric(Y.train)),
+##                            color.mixo(as.numeric(study.train)+4)),
 ## 
-##     legend = list(legend = cbind(c(levels(treatment)), c(levels(study))),
-##                 col = cbind(c(color.mixo(1:3)), c(color.mixo(5:6))),
+##     legend = list(legend = cbind(c(levels(Y.train)), c(levels(study.train))),
+##                 col = cbind(c(color.mixo(1:2)), c(color.mixo(5:6))),
 ##                 title = "Treatment and Study", cex = 0.8)
 ##     )
 
 
-## ---- echo = FALSE-----------------------------------------------------------------------------
-network(ab.mint.splsda, cutoff = 0.6,
-        color.node = c(color.mixo(1), color.mixo(2)), 
-        shape.node = c("rectangle", "circle"),
+## ---- echo = FALSE, eval = FALSE-------------------------------------------------------------------------------------------
+names <- gsub("[^0-9.-]", "", colnames(X.train))
+names[length(names)] <- "C3"
+
+network(ab.mint.splsda, cutoff = 0.7, comp = 1,
+        color.node = c(color.mixo(1), color.mixo(2)),
+        shape.node = c("circle", "rectangle"),
+        lty.edge = c("dotted", "solid"),
+        cex.node.name = 0.7,
+        alpha.node = 0.5,
+        row.names = names,
         save = 'jpeg', name.save = 'MINT Microbial Network')
 
 
-## ---- eval = FALSE-----------------------------------------------------------------------------
-## network(ab.mint.splsda, cutoff = 0.6,
+## ---- eval = FALSE---------------------------------------------------------------------------------------------------------
+## network(ab.mint.splsda, cutoff = 0.7, comp = 1,
 ##         color.node = c(color.mixo(1), color.mixo(2)),
-##         shape.node = c("rectangle", "circle"))
+##         shape.node = c("circle", "rectangle"),
+##         lty.edge = c("dotted", "solid"),
+##         cex.node.name = 0.7,
+##         alpha.node = 0.5,
+##         row.names = names)
 
 
-## ---- fig.align = "center"---------------------------------------------------------------------
+## ---- fig.align = "center"-------------------------------------------------------------------------------------------------
 ab.mint.splsda.perf <- perf(ab.mint.splsda, folds = 5, nrepeat = 10)
 plot(ab.mint.splsda.perf)
 
 
-## ---- eval = FALSE-----------------------------------------------------------------------------
-## auroc(ab.mint.splsda, roc.comp = 1, print = FALSE)
-## auroc(ab.mint.splsda, roc.comp = 2, print = FALSE)
-## auroc(ab.mint.splsda, roc.comp = 3, print = FALSE)
+## --------------------------------------------------------------------------------------------------------------------------
+# make predictions of stem cell type of study 3 samples
+predict.splsda <- predict(ab.mint.splsda, newdata = X.test, 
+                             dist = "max.dist", 
+                             study.test = study.test)
 
 
-## ---- fig.show = "hold", out.width = "49%"-----------------------------------------------------
-auroc(ab.mint.splsda, roc.comp = 1, roc.study = "Study 1", 
-      print = FALSE, title = "(a) Study 1 AUROC")
-auroc(ab.mint.splsda, roc.comp = 1, roc.study = "Study 2", 
-      print = FALSE, title = "(b) Study 2 AUROC")
+## ---- echo = FALSE---------------------------------------------------------------------------------------------------------
+YieldErrorRates <- function(comp) {
+  # extract the predictions
+  test.prediction <- predict.splsda$class$max.dist[, comp]
+
+  # generate the classification confusion matrix
+  conf.mat <- get.confusion_matrix(truth = Y.test, 
+                                   predicted = test.prediction)
+  
+  cat("Metrics for model with", comp, "component(s): ", "\n")
+  cat("Error rate: ", (sum(conf.mat) - sum(diag(conf.mat)))/sum(conf.mat), "\n")
+  cat("Balanced error rate: ", get.BER(conf.mat), "\n")
+}
+
+
+## --------------------------------------------------------------------------------------------------------------------------
+YieldErrorRates(1)
+YieldErrorRates(2)
+
+
+## ---- fig.align = "center"-------------------------------------------------------------------------------------------------
+auroc(ab.mint.splsda, roc.comp = 2, print = FALSE)
 
