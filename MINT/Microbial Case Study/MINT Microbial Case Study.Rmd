@@ -141,7 +141,7 @@ study.test <- as.factor(as.character(study[test.idx]))
 
 ### Tuning the model
 
-Using just the training data, the model is first tuned. Observing the error rates for each `keepX` on each component, the minimum is achieved by `keepX = 17` on the first component. As visualisation is desired, a minimum component count of 2 will be used. The next time that the error rate is minimised is `keepX = 32` on the second component. Hence, the optimal number of components is two and the optimal number of features is 17 and 32 respectively. 
+Using just the training data, the model is first tuned. Observing the error rates for each `keepX` on each component, the minimum is achieved by `keepX = 17` on the first component. Addition of the second to fifth components actually make no improvements over a model with one component. However, as visualisation is desired, a minimum component count of 2 will be used. Note that the lines depicting components 3 and 4 are not visible as they are the exact same as the fifth component (which is rendered on top of these two).
 
 ``` {r}
 # tune the ncomp and keepX parameters for the MINT sPLS-DA model
@@ -155,10 +155,13 @@ ab.mint.splsda.tuning <- tune(method = "mint.splsda",
                               dist = "centroids.dist")
 ```
 
+``` {r}
+plot(ab.mint.splsda.tuning, sd = FALSE) # sd = F due to LOO CV 
+```
+
+<p style="text-align: center;">FIGURE 2: Tuning plot of the MINT sPLS-DA models with up to 5 components. Diamonds represent the optimal number of features on a given component. Balanced error rate found on the vertical axis and is the metric to be minimised.</p>
 
 ``` {r}
-ab.mint.splsda.tuning$error.rate
-
 optimal.ncomp <- 2
 
 # extract the optimal keepX parameter
@@ -181,7 +184,7 @@ ab.mint.splsda <- mint.splsda(X = X.train, Y = Y.train,
 ### Visualising the model
 #### Sample Plots
 
-As always, the plot to start with is the sample projection plot. Figure 2 depicts the projection of the samples onto the 'global' variates, that which represent all studies. The placebo group has the studies separated along the first component while the studies are separated along the second component for the ammonia samples. Hence, the batch effect is still slightly present, but its impacts within each class have been severely reduced. The class distinction is significantly better than that of Figure 1 as they are linearly separable with the confidence ellipses sharing no overlap.
+As always, the plot to start with is the sample projection plot. Figure 3 depicts the projection of the samples onto the 'global' variates, that which represent all studies. The placebo group has the studies separated along the first component while the studies are separated along the second component for the ammonia samples. Hence, the batch effect is still slightly present, but its impacts within each class have been severely reduced. The class distinction is significantly better than that of Figure 1 as they are linearly separable with the confidence ellipses sharing no overlap.
 
 ``` {r, fig.align = "center"}
 plotIndiv(ab.mint.splsda, ind.names = F,legend=T,
@@ -193,11 +196,11 @@ plotIndiv(ab.mint.splsda, ind.names = F,legend=T,
           size.legend = rel(0.8))
 ```
 
-<p style="text-align: center;">FIGURE 2: Projection of the samples from both studies onto the global variates yielded by MINT sPLS-DA.</p>
+<p style="text-align: center;">FIGURE 3: Projection of the samples from both studies onto the global variates yielded by MINT sPLS-DA.</p>
 
 #### Variable Plots
 
-Understanding how the model has constructed the variates is an important step in learning how these classes are distinct. When considering global component 1 (Figure 3(a)), the association of each variable with a specific class is clear. Positively contributing features are exclusively associated with the `no inhibition` class while all negatively contributing features defined the `ammonia` group. This suggests that the first component (in the global space) is key in discriminating between these two classes. The functionality of the second component is not as clear, but Figure 3(b) does show the features which are the most important to this component.
+Understanding how the model has constructed the variates is an important step in learning how these classes are distinct. When considering global component 1 (Figure 4(a)), the association of each variable with a specific class is clear. Positively contributing features are exclusively associated with the `no inhibition` class while all negatively contributing features defined the `ammonia` group. This suggests that the first component (in the global space) is key in discriminating between these two classes. The functionality of the second component is not as clear, but Figure 4(b) does show the features which are the most important to this component.
 
 ``` {r, fig.show = "hold", out.width = "49%"}
 plotLoadings(ab.mint.splsda, method = "median", comp = 1, 
@@ -209,16 +212,16 @@ plotLoadings(ab.mint.splsda, method = "median", comp = 2,
              title = "(b) All Studies, Comp 2")
 ```
 
-<p style="text-align: center;">FIGURE 3: Feature loading values on the global, first (a) and second (b) component. Bars coloured based on the treatment class with the highest median on that variable.</p>
+<p style="text-align: center;">FIGURE 4: Feature loading values on the global, first (a) and second (b) component. Bars coloured based on the treatment class with the highest median on that variable.</p>
 
-The correlation circle plot (Figure 4) shows that a majority of the selected features have strong associations (both positive and negative) with the first component. There is a smaller set of those which define the second component. Those on the negative side of the first component are more tightly clustered, suggesting features that define the ammonia class are more homogeneous and the placebo group has signals that are more disparate. 
+The correlation circle plot (Figure 5) shows that a majority of the selected features have strong associations (both positive and negative) with the first component. There is a smaller set of those which define the second component. Those on the negative side of the first component are more tightly clustered, suggesting features that define the ammonia class are more homogeneous and the placebo group has signals that are more disparate. 
 
 ``` {r, fig.align = "center"}
 plotVar(ab.mint.splsda, var.names = FALSE,
         pch = 16, cutoff = 0.5)
 ```
 
-<p style="text-align: center;">FIGURE 4: Correlation circle plot representing the OTUs selected by MINT sPLS-DA performed on the microbial data to examine the association of the selected OTUs on the first two components. A minimum correlation value of 0.5 is required to be depicted on these axes.</p>
+<p style="text-align: center;">FIGURE 5: Correlation circle plot representing the OTUs selected by MINT sPLS-DA performed on the microbial data to examine the association of the selected OTUs on the first two components. A minimum correlation value of 0.5 is required to be depicted on these axes.</p>
 
 The below CIM visualises the filtered and transformed abundance data across all the selected OTUs. There are a few 'blocks' of homogeneous abundance counts. For instance, the placebo group has (on average) higher abundances for those OTUs in the right-most cluster while the ammonia class has higher abundances for those in the left cluster. The clustering of the rows shows the usefulness of the MINT framework. All the samples belonging to the same class were clustered together, irrespective of what study they were drawn from. This 'perfect' class clustering is not achieved by the standard sPLS-DA model. 
 
@@ -247,7 +250,7 @@ cim(ab.mint.splsda,
 
 <img src="http://mixomics.org/wp-content/uploads/2022/02/MINT-Microbial-CIM.jpeg" alt="newplot" style="max-width: 80%; display: block; margin: auto;"/>
 
-<p style="text-align: center;">FIGURE 5: Clustered Image Map of the OTUs selected by MINT sPLS-DA on the microbial data using all three components. A hierarchical clustering based on the counts of the selected OTUs was used, with samples in rows coloured according to the inoculation method.</p>
+<p style="text-align: center;">FIGURE 6: Clustered Image Map of the OTUs selected by MINT sPLS-DA on the microbial data using all three components. A hierarchical clustering based on the counts of the selected OTUs was used, with samples in rows coloured according to the inoculation method.</p>
 
 Lastly, the relevance network plot can be used to further understand the relationship between variables and classes. Note that `cutoff = 0.7`, such that any correlations below this value are not displayed at all. Being unable to control the position of the nodes in this plot makes interpretation more difficult. However, a key takeaway from this network is that all features with strong correlations (ie. above 0.7) have a positive association with one of the two classes and a negative association with the other. 
 
@@ -277,18 +280,18 @@ network(ab.mint.splsda, cutoff = 0.7, comp = 1,
 
 <img src="http://mixomics.org/wp-content/uploads/2022/02/MINT-Microbial-Network.jpeg" alt="newplot" style="max-width: 80%; display: block; margin: auto;"/>
 
-<p style="text-align: center;">FIGURE 6: Relevance network of the selected features on the first component by MINT sPLS-DA performed on the microbial OTU data. Dotted, red lines are positive while solid, green lines are negative. Minimum correlation value of 0.7 required to be shown.</p>
+<p style="text-align: center;">FIGURE 7: Relevance network of the selected features on the first component by MINT sPLS-DA performed on the microbial OTU data. Dotted, red lines are positive while solid, green lines are negative. Minimum correlation value of 0.7 required to be shown.</p>
 
 ### Testing the model on studies 3 and 4
 
-After the model has been explored, it's performance as a classifier is to be assessed. Here, the `perf()` function is used to determine which distance metric will be most appropriate to use. Addition of the second component either has no impact on the model performance, or in the case of the mahalanobis distance, worsened performance. Based on Figure 7, classification error rate is minimised using `max.dist`.
+After the model has been explored, it's performance as a classifier is to be assessed. Here, the `perf()` function is used to determine which distance metric will be most appropriate to use. Addition of the second component either has no impact on the model performance, or in the case of the mahalanobis distance, worsened performance. Based on Figure 8, classification error rate is minimised using `max.dist`.
 
 ``` {r, fig.align = "center"}
 ab.mint.splsda.perf <- perf(ab.mint.splsda, folds = 5, nrepeat = 10)
 plot(ab.mint.splsda.perf)
 ```
 
-<p style="text-align: center;">FIGURE 7: Classification error rate of the MINT sPLS-DA models, using up to two components for all three distance metrics.</p>
+<p style="text-align: center;">FIGURE 8: Classification error rate of the MINT sPLS-DA models, using up to two components for all three distance metrics.</p>
 
 Using the model generated above and the `predict()` function, predictions of the class labels for all samples from studies 3 and 4 can be made.
 
@@ -316,20 +319,20 @@ YieldErrorRates <- function(comp) {
 }
 ```
 
-As can be seen below, the error rate and balanced error both decrease with the addition of the second component, though the model was already quite good at classifying these novel samples with just one component. This is unsurprising as looking at Figure 2, the first component separated the two classes entirely. 
+As can be seen below, the error rate and balanced error both decrease with the addition of the second component, though the model was already quite good at classifying these novel samples with just one component. This is unsurprising as looking at Figure 3, the first component separated the two classes entirely. 
 
 ``` {r}
 YieldErrorRates(1)
 YieldErrorRates(2)
 ```
 
-Below, Figure 8 goes to show that sometimes the AUROC plot can show off some misleading results. For models using either one or both components the AUC is 1 despite the fact that the error rate wasn't 0. 
+Below, Figure 9 goes to show that sometimes the AUROC plot can show off some misleading results. For models using either one or both components the AUC is 1 despite the fact that the error rate wasn't 0. 
 
 ``` {r, fig.align = "center"}
 auroc(ab.mint.splsda, roc.comp = 2, print = FALSE)
 ```
 
-<p style="text-align: center;">FIGURE 8: ROC curve and AUC from the MINT sPLS-DA performed on the microbial OTU data using both components. Numerical output on right is the AUC values for the model.</p>
+<p style="text-align: center;">FIGURE 9: ROC curve and AUC from the MINT sPLS-DA performed on the microbial OTU data using both components. Numerical output on right is the AUC values for the model.</p>
 
 
 # More information on Plots
