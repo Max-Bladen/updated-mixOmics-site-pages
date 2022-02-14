@@ -1,0 +1,91 @@
+---
+#title: "Common Issues"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(dpi = 100, 
+                      echo= TRUE, 
+                      warning=FALSE, 
+                      message=FALSE, 
+                      fig.show=TRUE, 
+                      fig.keep = 'all',
+                      out.width = "70%")
+```
+
+This page lists some issues, errors and lack of features which are frequently asked about in the [mixOmics Discussion Forum](https://mixomics-users.discourse.group/). If your issue isn't found here (or in the general FAQ) then create a post in the forum and we will endeavour to respond to it ASAP.
+
+## **Common Error Messages**
+
+### **When undergoing PLS:**
+#### `chol.default(Cxx) : the leading minor of order 30 is not positive definite`
+
+This is mostly likely to occur when encountering singular matrices, where the total number of variables from both data sets is much larger than the number of samples. We suggest using regularized CCA instead (i.e. with regularization parameters $\lambda1$ and $\lambda2$ greater than 0) or (s)PLS in canonical mode.
+
+### **When undergoing sPLS-DA:**
+#### `system is computationally singular`
+
+There are a few different causes of this error and is context dependent. A few of the most likely sources are:
+
+- A large degree of sparsity within your data, such that there is a large number of missing or zero values. One suggestion would be to remove all features that have more than a certain threshold (eg. 20%) of zero/missing value. If this does not work, refer to the [Missing Values](http://mixomics.org/methods/missing-values/) page on how to impute these values manually. 
+- You are trying to create a (s)PLS-DA model with too many components. This is likely to result in large, empty matrices. Try reducing the number of components within your model.
+- The features you are inputting have a high degree of multi-collinearity such that they are extremely similar in their distributions. Before generating the model, assess your features for their collinearity and remove features which are extremely similar to others. 
+
+
+### **Using the *cim()* function:**
+#### `Error in abs(mat$rotation) : non-numeric argument to mathematical function`
+
+Unfortunately, the `cim()` function cannot currently take objects of type `pca`. This is an issue that is currently being worked on.
+
+### **Using the *cim()* function:**
+#### `Error in cim plot: invalid value specified for graphical parameter "pin"`
+
+Unfortunately, the `cim()` function cannot currently take objects of type `ipca`. This is an issue that is currently being worked on.
+
+### **Using the *cim()* function:**
+#### `Error in cim plot : figure margins too large`
+
+This is caused by the actual window being too small in Rstudio. It is advised to make Rstudio cover the whole screen and then adjust the margins of the various windows such that the size of the window where the 'Plots' is found is maximised. This should resolve this common error.
+
+If this fails, the use of the `X11()` function may also resolve this. Refer to the `save` and `name.save` parameters to produce an image to an external file if this is still an issue.
+
+
+## **Common Issues**
+
+### **Despite using the same code as indicated in the tutorial or the help file, *plsda()* returns an error message:**
+
+This is highly likely due to a clash with another package that also provides a `plsda()` function (`caret` or `muma` for instance; the `spls` package provides a `splsda()` function) that was loaded before `mixOmics.` You can either unload these packages using the function `detach()` or use the command `mixOmics::plsda(...)` to be force the `plsda()` function from `mixOmics` to be run.
+
+### **Names of features in a plot are too long causing one of the following plots:**
+
+``` {r, echo = FALSE, out.width = "49%", fig.show = "hold"}
+library(mixOmics)
+data(nutrimouse)
+Y = nutrimouse$diet
+gene = nutrimouse$gene
+## extend feature names
+suff <- "-a-long-suffix-from-abolutely-nowhere-which-will-be-too-loooooong"
+a <- as.character(1:length(colnames(gene)))
+colnames(gene) <- paste0(a, suff)
+
+nutrimouse.splsda = splsda(X = gene,
+                           Y = Y,
+                           keepX = c(10,10),
+                           ncomp = 2)
+
+plotLoadings(nutrimouse.splsda, contrib = "min")
+plotVar(nutrimouse.splsda)
+```
+
+If this is the case, then the `var.names` parameter (or in the case of `cim()` and `network()`, `row.names` & `col.names`) can be used to manually input the variable names.
+
+For the `plotLoadings()` function specifically, if any of the variable names are longer that 68 characters, the following error will be raised and nothing will be plotted:
+
+`plotLoadings encountered margin errors. Ensure feature names are not too long` 
+`(see ‘name.var’ argument) and the ‘Plots’ pane is cleared and enlargened.`
+
+### **The *vip()* has more non-zero features than the corresponding *keepX* value:**
+
+This issue is caused by the discrepancy between how values are selected in the tuning process versus how VIP values are calculated. It is unlikely (but not impossible) that the tuning process will select the same feature to be used for multiple components. If a feature has been selected for component 1 (and not component 2), but has non-zero VIPs for both components, component 2 will have one extra non-zero VIP compared to its `keepX` value. 
+

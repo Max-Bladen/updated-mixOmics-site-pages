@@ -280,7 +280,7 @@ network(ab.mint.splsda, cutoff = 0.7, comp = 1,
 
 <img src="http://mixomics.org/wp-content/uploads/2022/02/MINT-Microbial-Network.jpeg" alt="newplot" style="max-width: 80%; display: block; margin: auto;"/>
 
-<p style="text-align: center;">FIGURE 7: Relevance network of the selected features on the first component by MINT sPLS-DA performed on the microbial OTU data. Dotted, red lines are positive while solid, green lines are negative. Minimum correlation value of 0.7 required to be shown.</p>
+<p style="text-align: center;">FIGURE 7: Relevance network of the selected features on the first component by MINT sPLS-DA performed on the microbial OTU data. Dotted, red lines are positive while solid, green lines are negative. Minimum correlation value of 0.7 required to be shown. Number circles denote specific OTUs (number specifies which OTU) while rectangles denote classes.</p>
 
 ### Testing the model on studies 3 and 4
 
@@ -326,7 +326,7 @@ YieldErrorRates(1)
 YieldErrorRates(2)
 ```
 
-Below, Figure 9 goes to show that sometimes the AUROC plot can show off some misleading results. For models using either one or both components the AUC is 1 despite the fact that the error rate wasn't 0. 
+Below, Figure 9 goes to show that sometimes the AUROC plot can show off some optimistic results. For models using one or both components the AUC is 1 despite the fact that the error rate was non-zero. This is also a good example of why evaluating a model using a variety of metrics (ie. error rate, specificity, recall, etc) is important as they don't always agree. In this case, the overall error rate is the most useful though this may not always be the case. 
 
 ``` {r, fig.align = "center"}
 auroc(ab.mint.splsda, roc.comp = 2, print = FALSE)

@@ -96,15 +96,7 @@ Useful links:
 - 1. [rCCA Methods page](http://mixomics.org/methods/rcca/)
 - 2. [rCCA Case Study](http://mixomics.org/case-studies/rcca-nutrimouse-case-study/)
 
-#### **When running `rcc()`, I have run into the following error:**
-#### `chol.default(Cxx) : the leading minor of order 30 is not positive definite`
 
-This is mostly likely to occur when encountering singular matrices, where the total number of variables from both data sets is much larger than the number of samples. We suggest using regularized CCA instead (i.e. with regularization parameters $\lambda1$ and $\lambda2$ greater than 0) or (s)PLS in canonical mode.
-
-Useful links:
-
-- 1. [rCCA Methods page](http://mixomics.org/methods/rcca/)
-- 2. [(s)PLS Methods page](http://mixomics.org/methods/spls/)
 
 #### **I'm looking at the output of `tune.splsda()`. What distance metric should I use and should I use the overall or balanced error rate?**
 
@@ -298,23 +290,6 @@ Useful links:
 - 1. [`cim()` Graphics Page](http://mixomics.org/graphics/variable-plots/cim/)
 - 2. [`network()` Graphics Page](http://mixomics.org/graphics/variable-plots/network/)
 
-
-#### **Why does `plsda()` return an error message even though I am using the same code as indicated in the tutorial or the help file?**
-
-This is highly likely due to a clash with another package that also provides a `plsda()` function (`caret` or `muma` for instance; the `spls` package provides a `splsda()` function) that was loaded before `mixOmics`. You can either unload these packages using the function `detach()` or use the command `mixOmics::plsda(...)` to be force the `plsda()` function from `mixOmics` to be run.
-
-
-#### **What does the error `system is computationally singular` mean when undergoing (s)PLS-DA?**
-
-There are a few different causes of this error and is context dependent. A few of the most likely sources are:
-
-- A large degree of sparsity within your data, such that there is a large number of missing or zero values. One suggestion would be to remove all features that have more than a certain threshold (eg. 20%) of zero/missing value. If this does not work, refer to the Missing Values page on the site (link directly below) on how to impute these values manually. 
-- You are trying to create a (s)PLS-DA model with too many components. This is likely to result in large, empty matrices. Try reducing the number of components within your model.
-- The features you are inputting have a high degree of multi-collinearity such that they are extremely similar in their distributions. Before generating the model, assess your features for their collinearity and remove features which are extremely similar to others. 
-
-Useful links:
-
-- 1. [Missing Values Page](http://mixomics.org/methods/missing-values/)
 
 
 #### **Why are the outputs of the `mixOmics` (s)PLS-DA method different to the output of packages such as`DiscriMiner`, `SIMCA` and `ropls`?**
